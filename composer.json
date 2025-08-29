@@ -1,0 +1,12 @@
+{
+
+    "require": {
+        "workerman/gateway-worker" : "*",
+        "ext-json": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "": "./Applications/Chat/"
+        }
+    }
+}

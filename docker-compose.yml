@@ -1,0 +1,43 @@
+services:
+  workerman:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: couckan-app
+    depends_on:
+      - db
+    ports:
+      - "443:443"     # HTTPS
+      - "8002:8002"   # HTTP
+      - "7272:7272"   # WebSocket
+      - "1236:1236"   # Register
+    volumes:
+      - ./:/var/www/couckan/
+    command: php start.php start   # foreground obligatoire
+
+  db:
+    image: mysql:8.0
+    container_name: couckan-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: couckan
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: couckan-phpmyadmin
+    restart: always
+    environment:
+      PMA_HOST: db
+      PMA_USER: user
+      PMA_PASSWORD: password
+    ports:
+      - "8081:80"
+
+volumes:
+  db_data:
