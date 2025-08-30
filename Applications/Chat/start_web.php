@@ -7,6 +7,7 @@ use Workerman\Protocols\Http\Response;
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/ChatDb.php';
 
 
 
@@ -24,6 +25,7 @@ define('WEBROOT', __DIR__ . DIRECTORY_SEPARATOR .  'Web');
 define('APIROOT', __DIR__ . DIRECTORY_SEPARATOR .  'Api');
 
 $web->onMessage = function (TcpConnection $connection, Request $request) {
+    ChatDb::logRequest($request->path(), $request->header('user-agent', ''), $connection->getRemoteIp());
     $_GET = $request->get();
     $path = $request->path();
     if ($path === '/') {

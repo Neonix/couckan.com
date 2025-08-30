@@ -44,6 +44,11 @@
     .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)}
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
+    @media (max-width:768px){
+      body{flex-direction:column;height:auto}
+      .sidebar{width:100%;flex-direction:row;flex-wrap:wrap;height:auto}
+      .chat{order:2}
+    }
   </style>
 </head>
 <body>
@@ -124,7 +129,7 @@ function loginRoom(roomId){
   // reset UI utilisateurs (évite l'affichage d'une ancienne liste avant le "welcome")
   clients = {};
   renderUsers();
-  ws.send(JSON.stringify({type:'login', client_name:name, room_id:roomId, status}));
+  ws.send(JSON.stringify({type:'login', client_name:name, room_id:roomId, status, ua: navigator.userAgent}));
 }
 
 function changeStatus(){
@@ -158,6 +163,11 @@ function onmessage(e){
       // S’assure que l’onglet de la room existe et devient actif
       ensureRoomTab(data.room_id);
       renderRooms();
+      break;
+    }
+    case 'history': {
+      (data.messages || []).forEach(m => storeMessage(m));
+      renderMessages();
       break;
     }
 
