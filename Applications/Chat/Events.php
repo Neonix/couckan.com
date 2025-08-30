@@ -1,5 +1,6 @@
 <?php
 use \GatewayWorker\Lib\Gateway;
+require_once __DIR__ . '/ChatDb.php';
 
 /**
  * Démo sans persistance : on diffuse des événements (login/status/new_room/room_closed/say).
@@ -25,6 +26,7 @@ class Events
                 $room_id     = $data['room_id']    ?? 'general';
                 $client_name = htmlspecialchars($data['client_name'] ?? 'Invité');
                 $status      = $data['status']     ?? 'online';
+                $ua          = $data['ua']         ?? '';
 
                 // Remplit la session avant joinGroup pour que getClientSessionsByGroup voie status/name
                 $_SESSION['room_id']     = $room_id;
@@ -64,6 +66,15 @@ class Events
                     'time'        => date('Y-m-d H:i:s'),
                 ];
                 Gateway::sendToClient($client_id, json_encode($welcome_msg));
+
+                $history = ChatDb::getMessages($room_id);
+                Gateway::sendToClient($client_id, json_encode([
+                    'type'     => 'history',
+                    'room_id'  => $room_id,
+                    'messages' => $history
+                ]));
+
+                ChatDb::logRequest('ws_login', $ua, '');
                 return;
             }
 
@@ -154,6 +165,8 @@ class Events
                     ];
                     Gateway::sendToClient($to_id, json_encode($msg));
                     Gateway::sendToClient($client_id, json_encode($msg));
+                    $room_key = 'dm:' . min($client_id, $to_id) . ':' . max($client_id, $to_id);
+                    ChatDb::logMessage($room_key, (string)$client_id, $client_name, (string)$to_id, $content);
                     return;
                 }
 
@@ -168,6 +181,7 @@ class Events
                     'time'             => date('Y-m-d H:i:s'),
                 ];
                 Gateway::sendToGroup($room_id, json_encode($msg));
+                ChatDb::logMessage($room_id, (string)$client_id, $client_name, 'all', $content);
                 return;
             }
         }
