@@ -94,6 +94,20 @@ class Events
                 return;
             }
 
+            case 'rename': {
+                $new = htmlspecialchars(trim($data['client_name'] ?? ''));
+                if ($new === '') $new = 'Invité';
+                $_SESSION['client_name'] = $new;
+                $room_id = $_SESSION['room_id'] ?? 'general';
+                $msg = [
+                    'type'       => 'rename',
+                    'client_id'  => $client_id,
+                    'client_name'=> $new,
+                ];
+                Gateway::sendToGroup($room_id, json_encode($msg));
+                return;
+            }
+
             /**
              * Création d'une room.
              *  - publique  => "new_room" broadcast (apparait pour tout le monde)
