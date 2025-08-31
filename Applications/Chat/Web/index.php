@@ -116,7 +116,7 @@ function connect(){
   ws = new WebSocket('wss://' + document.domain + ':7272');
 
   ws.onopen = () => {
-    if (!name) name = prompt('Votre pseudo ?') || 'Invité';
+    if (!name) name = localStorage.getItem('chatName') || 'Invité';
     // login première room : soit "general", soit celle de l'URL si présente
     loginRoom([...rooms.keys()][0]);
   };
@@ -141,6 +141,15 @@ function changeStatus(){
   }
   // et propagation serveur
   ws.send(JSON.stringify({type:'status', status}));
+}
+
+function chooseName(){
+  if (name === 'Invité') {
+    const newName = prompt('Votre pseudo ?') || 'Invité';
+    name = newName;
+    localStorage.setItem('chatName', name);
+    ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
+  }
 }
 
 /* =========================
@@ -188,6 +197,20 @@ function onmessage(e){
       // MAJ statut en temps réel
       if (!clients[data.client_id]) clients[data.client_id] = {name:'Utilisateur', status:data.status};
       clients[data.client_id].status = data.status;
+      renderUsers();
+      break;
+    }
+
+    case 'rename': {
+      if (!clients[data.client_id]) {
+        clients[data.client_id] = {name: data.client_name || 'Invité', status: 'online'};
+      } else {
+        clients[data.client_id].name = data.client_name || 'Invité';
+      }
+      if (client_id && data.client_id == client_id) {
+        name = data.client_name;
+        localStorage.setItem('chatName', name);
+      }
       renderUsers();
       break;
     }
@@ -393,7 +416,8 @@ function renderUsers(){
     label.textContent = (info.name || 'Invité') + (id == client_id ? ' (moi)' : '');
     div.appendChild(label);
 
-    if (id != client_id) div.onclick = () => openDM(id, info.name || 'Invité');
+    if (id == client_id) div.onclick = chooseName;
+    else div.onclick = () => openDM(id, info.name || 'Invité');
 
     u.appendChild(div);
   });
