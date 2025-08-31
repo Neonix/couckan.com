@@ -11,8 +11,11 @@
       --ok:#22c55e; --busy:#f97316; --away:#ef4444; --warn:#facc15;
     }
     *{box-sizing:border-box}
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden}
-    .sidebar{width:240px;background:var(--panel);display:flex;flex-direction:column;padding:1rem;gap:.75rem;overflow-y:auto}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;height:100dvh;overflow:hidden}
+    .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
+    .sidebar details{display:flex;flex-direction:column;gap:.75rem;padding:1rem}
+    .sidebar summary{list-style:none;cursor:pointer}
+    .sidebar summary::-webkit-details-marker{display:none}
     .h2{font-size:14px;font-weight:700;color:#38bdf8;display:flex;align-items:center;gap:.5rem;margin:0}
     .list{display:flex;flex-direction:column;gap:.4rem}
     .item{background:var(--muted);padding:.5rem .6rem;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:.5rem}
@@ -45,25 +48,29 @@
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
     @media (max-width:768px){
-      body{flex-direction:column;height:auto}
-      .sidebar{width:100%;flex-direction:row;flex-wrap:wrap;height:auto}
-      .chat{order:2}
+      body{flex-direction:column;height:auto;overflow:auto}
+      .chat{order:1;width:100%}
+      .sidebar{flex:0 0 100%;width:100%;height:auto}
+      .sidebar.rooms{order:2}
+      .sidebar.users{order:3}
     }
   </style>
 </head>
 <body>
   <!-- Salles -->
-  <aside class="sidebar">
-    <h2 class="h2">🛰️ Salles</h2>
-    <div id="rooms" class="list"></div>
-    <div class="row">
-      <input id="newRoomName" type="text" placeholder="Nom de la salle" />
-    </div>
-    <div class="row" style="align-items:center">
-      <label><input id="isPrivate" type="checkbox" /> Privée (via lien)</label>
-      <button class="btn" onclick="createRoom()">Créer</button>
-    </div>
-    <div class="hint">Les salles privées n’apparaissent pas publiquement. Partage le lien 🔗 pour y inviter quelqu’un.</div>
+  <aside class="sidebar rooms">
+    <details open>
+      <summary class="h2">🛰️ Salles</summary>
+      <div id="rooms" class="list"></div>
+      <div class="row">
+        <input id="newRoomName" type="text" placeholder="Nom de la salle" />
+      </div>
+      <div class="row" style="align-items:center">
+        <label><input id="isPrivate" type="checkbox" /> Privée (via lien)</label>
+        <button class="btn" onclick="createRoom()">Créer</button>
+      </div>
+      <div class="hint">Les salles privées n’apparaissent pas publiquement. Partage le lien 🔗 pour y inviter quelqu’un.</div>
+    </details>
   </aside>
 
   <!-- Chat -->
@@ -77,17 +84,22 @@
   </main>
 
   <!-- Utilisateurs -->
-  <aside class="sidebar">
-    <h2 class="h2">👥 Utilisateurs</h2>
-    <div id="users" class="list"></div>
-    <select id="statusSelect" class="select" onchange="changeStatus()">
-      <option value="online">🟢 En ligne</option>
-      <option value="busy">🟠 Occupé</option>
-      <option value="away">🔴 Absent</option>
-    </select>
+  <aside class="sidebar users">
+    <details open>
+      <summary class="h2">👥 Utilisateurs</summary>
+      <div id="users" class="list"></div>
+      <select id="statusSelect" class="select" onchange="changeStatus()">
+        <option value="online">🟢 En ligne</option>
+        <option value="busy">🟠 Occupé</option>
+        <option value="away">🔴 Absent</option>
+      </select>
+    </details>
   </aside>
 
 <script>
+if (window.matchMedia('(max-width:768px)').matches) {
+  document.querySelectorAll('.sidebar details').forEach(d => d.removeAttribute('open'));
+}
 /* =========================
    ÉTAT APP
 ========================= */
