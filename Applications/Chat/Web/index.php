@@ -68,6 +68,7 @@ include __DIR__ . '/../../../config.php';
     #callOverlay.active{display:flex}
     #callOverlay video{max-width:90%;max-height:80%;background:#000;border-radius:8px;margin:.5rem}
     #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
+    #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
     @media (max-width:768px){
       #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none}
       .chat{order:1;width:100%;margin-bottom:60px}
@@ -131,7 +132,13 @@ include __DIR__ . '/../../../config.php';
   <div id="callOverlay">
     <video id="localVideo" autoplay muted playsinline></video>
     <div id="remoteVideos"></div>
-    <button class="btn" onclick="hangup()">Raccrocher</button>
+    <div id="callControls">
+      <button class="btn secondary" id="micBtn" onclick="toggleMic()">Couper micro</button>
+      <button class="btn secondary" id="videoBtn" onclick="toggleVideo()">Désactiver vidéo</button>
+      <button class="btn secondary" onclick="toggleFullscreen()">Plein écran</button>
+      <button class="btn secondary" onclick="recall()">Rappeler</button>
+      <button class="btn" onclick="hangup()">Raccrocher</button>
+    </div>
   </div>
 
 <script>
@@ -149,12 +156,27 @@ navigator.geolocation = navigator.geolocation ||
   navigator.mozGeolocation ||
   navigator.msGeolocation;
 
+function getUserMedia(constraints){
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+    return navigator.mediaDevices.getUserMedia(constraints);
+  }
+  return new Promise((resolve, reject)=>{
+    if (navigator.getUserMedia){
+      navigator.getUserMedia(constraints, resolve, reject);
+    } else {
+      reject(new Error('getUserMedia not supported'));
+    }
+  });
+}
+
 let ws, name, client_id = null, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false;
 let notifState = 'all', locationState = 'all';
 const mutedUsers = new Set();
 const SIGNALING_URL = '<?php echo $SIGNALING_ADDRESS; ?>';
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
+let lastCallRoom = null, lastCallVideo = false;
+let micEnabled = true, videoEnabled = true;
 
 const CESIUM_ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjNmM4NjEwYy01MjZkLTQ2YmYtYmI2ZC1kNzg4MjdhNjUxODIiLCJpZCI6NjI5OTEsImlhdCI6MTYyNzYzNDAyMn0.hAoXjLhK-PqlsdJUcZH083NqaUeg04WtA3jFkNfGi-M';
 Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
@@ -320,8 +342,12 @@ function joinGroup(id){
 function joinCall(room, video){
   if (callRoom) hangup();
   callRoom = room; callVideo = video;
+  lastCallRoom = room; lastCallVideo = video;
+  micEnabled = true; videoEnabled = video;
+  document.getElementById('micBtn').textContent = 'Couper micro';
+  document.getElementById('videoBtn').textContent = video ? 'Désactiver vidéo' : 'Activer vidéo';
   document.getElementById('callOverlay').classList.add('active');
-  navigator.mediaDevices.getUserMedia({audio:true, video:video}).then(stream => {
+  getUserMedia({audio:true, video:video}).then(stream => {
     localStream = stream;
     document.getElementById('localVideo').srcObject = stream;
     connectSignal(room);
@@ -367,16 +393,40 @@ function handleSignal(msg){
       if (msg.to !== client_id) return;
       peers[msg.from]?.addIceCandidate(new RTCIceCandidate(msg.candidate));
       break;
+    case 'leave':
+      if (msg.from === client_id) return;
+      peers[msg.from]?.close();
+      delete peers[msg.from];
+      document.getElementById('remote_'+msg.from)?.remove();
+      break;
   }
 }
 
 function createPeer(id){
   if (peers[id]) return peers[id];
-  const pc = new RTCPeerConnection();
+  const pc = new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
   peers[id] = pc;
   if (localStream) localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
   pc.onicecandidate = e => { if (e.candidate) signalSend({type:'candidate', from:client_id, to:id, candidate:e.candidate}); };
-  pc.ontrack = e => { addRemoteStream(id, e.streams[0]); };
+  pc.ontrack = e => {
+    const stream = (e.streams && e.streams[0]) ? e.streams[0] : new MediaStream([e.track]);
+    addRemoteStream(id, stream);
+  };
+  pc.onnegotiationneeded = async () => {
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      signalSend({type:'offer', from:client_id, to:id, sdp:offer});
+    } catch(err){
+      console.error('negotiation', err);
+    }
+  };
+  pc.onconnectionstatechange = () => {
+    if (['disconnected','failed','closed'].includes(pc.connectionState)){
+      document.getElementById('remote_'+id)?.remove();
+      delete peers[id];
+    }
+  };
   return pc;
 }
 
@@ -391,11 +441,59 @@ function addRemoteStream(id, stream){
   v.srcObject = stream;
 }
 
+function toggleMic(){
+  if (!localStream) return;
+  const track = localStream.getAudioTracks()[0];
+  if (!track) return;
+  micEnabled = !track.enabled;
+  track.enabled = micEnabled;
+  document.getElementById('micBtn').textContent = micEnabled ? 'Couper micro' : 'Activer micro';
+}
+
+function toggleVideo(){
+  if (!localStream) return;
+  let track = localStream.getVideoTracks()[0];
+  if (track){
+    videoEnabled = !track.enabled;
+    track.enabled = videoEnabled;
+    document.getElementById('videoBtn').textContent = videoEnabled ? 'Désactiver vidéo' : 'Activer vidéo';
+  } else {
+    getUserMedia({video:true}).then(stream=>{
+      track = stream.getVideoTracks()[0];
+      localStream.addTrack(track);
+      Object.values(peers).forEach(pc=>pc.addTrack(track, localStream));
+      videoEnabled = true;
+      document.getElementById('videoBtn').textContent = 'Désactiver vidéo';
+    }).catch(err=>console.error('video', err));
+  }
+}
+
+function toggleFullscreen(){
+  const overlay = document.getElementById('callOverlay');
+  if (!document.fullscreenElement){
+    (overlay.requestFullscreen || overlay.webkitRequestFullscreen || overlay.mozRequestFullScreen || overlay.msRequestFullscreen)?.call(overlay);
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen)?.call(document);
+  }
+}
+
+function recall(){
+  if (lastCallRoom) joinCall(lastCallRoom, lastCallVideo);
+}
+
 function hangup(){
+  signalSend({type:'leave', from:client_id});
   Object.values(peers).forEach(pc=>pc.close());
   peers = {};
-  if (localStream) { localStream.getTracks().forEach(t=>t.stop()); localStream = null; }
+  if (localStream) {
+    localStream.getTracks().forEach(t=>t.stop());
+    document.getElementById('localVideo').srcObject = null;
+    localStream = null;
+  }
   if (signal) { signal.close(); signal = null; }
+  if (document.fullscreenElement){
+    (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen)?.call(document);
+  }
   callRoom = null;
   document.getElementById('remoteVideos').innerHTML = '';
   document.getElementById('callOverlay').classList.remove('active');
