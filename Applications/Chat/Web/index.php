@@ -18,8 +18,9 @@ include __DIR__ . '/../../../config.php';
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
-    #chatWrapper{position:absolute;top:0;left:0;right:0;bottom:0;display:none;min-height:100vh;height:100dvh;overflow:hidden}
+    #chatWrapper{position:absolute;top:0;left:0;right:0;bottom:0;display:none;min-height:100vh;height:100dvh;overflow:hidden;z-index:10}
     #chatWrapper.active{display:flex}
+    .cesium-viewer-toolbar{z-index:20}
     .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
     .sidebar details{display:flex;flex-direction:column;gap:.75rem;padding:1rem}
     .sidebar summary{list-style:none;cursor:pointer}
@@ -116,7 +117,7 @@ if (window.matchMedia('(max-width:768px)').matches) {
 /* =========================
    ÉTAT APP
 ========================= */
-let ws, name, client_id = null, status = 'online';
+let ws, name, client_id = null, status = 'online', clients = {};
 
 const CESIUM_ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjNmM4NjEwYy01MjZkLTQ2YmYtYmI2ZC1kNzg4MjdhNjUxODIiLCJpZCI6NjI5OTEsImlhdCI6MTYyNzYzNDAyMn0.hAoXjLhK-PqlsdJUcZH083NqaUeg04WtA3jFkNfGi-M';
 Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
@@ -126,7 +127,11 @@ const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
 const chatBtn = document.createElement('button');
 chatBtn.className = 'cesium-button cesium-toolbar-button';
-function updateChatBtn(){ chatBtn.textContent = (localStorage.getItem('chatName') || 'Invité') + ' 💬'; }
+function updateChatBtn(){
+  const uname = localStorage.getItem('chatName') || 'Invité';
+  const count = Object.keys(clients).length;
+  chatBtn.textContent = `${uname} 💬 (${count})`;
+}
 updateChatBtn();
 chatBtn.onclick = () => chatWrapper.classList.toggle('active');
 toolbar.appendChild(chatBtn);
@@ -154,7 +159,6 @@ let messages   = { room_general: [] };
 let tabs       = { room_general: 'Salle générale' };
 
 // liste d’utilisateurs de la room active : { id: {name, status} }
-let clients = {};
 
 // liste des rooms visibles côté UI
 // value = {visibility: 'public'|'private', creator_id: number|null}
@@ -569,6 +573,7 @@ function renderUsers(){
 
     u.appendChild(div);
   });
+  updateChatBtn();
 }
 
 /* =========================
