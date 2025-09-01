@@ -948,8 +948,10 @@ function openDM(id, username){
   if (!messages[key]) messages[key] = [];
   tabs[key] = 'DM avec ' + username;
   currentKey = key;
-  renderTabs(); renderMessages();
-  if (chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink');
+  chatWrapper.classList.add('active');
+  renderTabs();
+  renderMessages();
+  chatBtn.classList.remove('blink');
 }
 
 function onSubmit(){
