@@ -4,11 +4,10 @@
 
 
 $_config = array(
-    'docker' => true,
-    'localdev' => true,
+    'docker' => false,
     'ssl' => true,
+    'localdev' => true,
     'geoip' => false
-
 );
 
 //if($_config['docker'])

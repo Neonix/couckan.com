@@ -140,7 +140,10 @@ function connect(){
     );";
   } else {
       // WebServer
-      echo "ws = new WebSocket('wss://' + document.domain + ':7272');";
+      if ($_config['ssl']) 
+        echo "ws = new WebSocket('wss://' + document.domain + ':7272');";
+      else
+        echo "ws = new WebSocket('ws://' + document.domain + ':7272');";
   }
   ?>
 
