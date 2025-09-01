@@ -173,11 +173,22 @@ let ws, name, client_id = null, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false;
 let notifState = 'all', locationState = 'all';
 const mutedUsers = new Set();
-const SIGNALING_URL = '<?php echo $SIGNALING_ADDRESS; ?>';
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
 let micEnabled = true, videoEnabled = true;
 
+  <?php
+  if ($_config['docker']) {
+    echo "const SIGNALING_URL = 'wss://' + document.domain + '/signal';";
+  } else {
+      // WebServer
+      if ($_config['ssl']) 
+        echo "const SIGNALING_URL = 'wss://' + document.domain + ':8877';";
+      else
+        echo "const SIGNALING_URL = 'ws://' + document.domain + ':8877';";
+  }
+  ?>
+  
 const CESIUM_ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjNmM4NjEwYy01MjZkLTQ2YmYtYmI2ZC1kNzg4MjdhNjUxODIiLCJpZCI6NjI5OTEsImlhdCI6MTYyNzYzNDAyMn0.hAoXjLhK-PqlsdJUcZH083NqaUeg04WtA3jFkNfGi-M';
 Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
 
