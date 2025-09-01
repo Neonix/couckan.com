@@ -76,6 +76,20 @@ class Events
                     'messages' => $history
                 ]));
 
+                // Position par défaut proche de Null Island tant que l'utilisateur
+                // n'a pas partagé sa véritable localisation
+                $randLat = mt_rand(-50, 50) / 1000; // +/-0.05°
+                $randLon = mt_rand(-50, 50) / 1000;
+                self::$locations[$client_id] = [
+                    'client_id'   => $client_id,
+                    'client_name' => $client_name,
+                    'lat'         => $randLat,
+                    'lon'         => $randLon,
+                ];
+                $loc = self::$locations[$client_id];
+                $loc['type'] = 'location';
+                Gateway::sendToAll(json_encode($loc));
+
                 Gateway::sendToClient($client_id, json_encode([
                     'type' => 'locations',
                     'locations' => array_values(self::$locations)
@@ -98,6 +112,23 @@ class Events
                     'status'    => $new,
                 ];
                 Gateway::sendToGroup($room_id, json_encode($msg));
+
+                if ($new === 'invisible' && isset(self::$locations[$client_id])) {
+                    unset(self::$locations[$client_id]);
+                    Gateway::sendToAll(json_encode(['type'=>'location_remove','client_id'=>$client_id]));
+                } elseif ($new !== 'invisible' && !isset(self::$locations[$client_id])) {
+                    $randLat = mt_rand(-50, 50) / 1000;
+                    $randLon = mt_rand(-50, 50) / 1000;
+                    self::$locations[$client_id] = [
+                        'client_id'   => $client_id,
+                        'client_name' => $_SESSION['client_name'] ?? 'Invité',
+                        'lat'         => $randLat,
+                        'lon'         => $randLon,
+                    ];
+                    $loc = self::$locations[$client_id];
+                    $loc['type'] = 'location';
+                    Gateway::sendToAll(json_encode($loc));
+                }
                 return;
             }
 
@@ -135,6 +166,14 @@ class Events
                 $msg = self::$locations[$client_id];
                 $msg['type'] = 'location';
                 Gateway::sendToAll(json_encode($msg));
+                // passe automatiquement le statut en "localized"
+                $_SESSION['status'] = 'localized';
+                $room_id = $_SESSION['room_id'] ?? 'general';
+                Gateway::sendToGroup($room_id, json_encode([
+                    'type'      => 'status',
+                    'client_id' => $client_id,
+                    'status'    => 'localized',
+                ]));
                 return;
             }
 

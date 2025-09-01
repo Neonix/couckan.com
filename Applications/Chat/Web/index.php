@@ -13,12 +13,11 @@ include __DIR__ . '/../../../config.php';
     :root{
       --bg:#0f172a; --panel:#1e293b; --muted:#334155; --muted-2:#475569;
       --accent:#0ea5e9; --text:#f8fafc; --sub:#94a3b8;
-      --ok:#22c55e; --busy:#f97316; --away:#ef4444; --warn:#facc15;
+      --ok:#22c55e; --busy:#f97316; --away:#ef4444; --warn:#facc15; --localized:#3b82f6; --invisible:#6b7280;
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
-    #chatToggle{position:fixed;top:10px;right:10px;background:var(--panel);color:var(--text);padding:.4rem .6rem;border-radius:6px;cursor:pointer;z-index:1000}
     #chatWrapper{position:absolute;top:0;left:0;right:0;bottom:0;display:none;min-height:100vh;height:100dvh;overflow:hidden}
     #chatWrapper.active{display:flex}
     .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
@@ -53,7 +52,7 @@ include __DIR__ . '/../../../config.php';
     .input textarea{flex:1;min-height:42px;max-height:160px;resize:vertical;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.6rem;border-radius:8px}
     .input button{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:.55rem 1rem;cursor:pointer}
     .dot{width:10px;height:10px;border-radius:50%}
-    .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)}
+    .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)} .dot.localized{background:var(--localized)} .dot.invisible{background:var(--invisible)}
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
     @media (max-width:768px){
@@ -67,7 +66,6 @@ include __DIR__ . '/../../../config.php';
 </head>
 <body>
   <div id="cesiumContainer"></div>
-  <div id="chatToggle"><span id="chatUser">Invité</span> 💬</div>
   <div id="chatWrapper">
   <!-- Salles -->
   <aside class="sidebar rooms">
@@ -102,10 +100,12 @@ include __DIR__ . '/../../../config.php';
       <div id="users" class="list"></div>
       <select id="statusSelect" class="select" onchange="changeStatus()">
         <option value="online">🟢 En ligne</option>
-        <option value="busy">🟠 Occupé</option>
+        <option value="localized">📍 Localisé</option>
         <option value="away">🔴 Absent</option>
+        <option value="busy">🟠 Occupé</option>
+        <option value="invisible">⚫ Invisible</option>
       </select>
-    </details>
+      </details>
   </aside>
   </div>
 
@@ -123,9 +123,19 @@ Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
 const viewer = new Cesium.Viewer('cesiumContainer');
 const locationEntities = {};
 const chatWrapper = document.getElementById('chatWrapper');
-const chatToggle  = document.getElementById('chatToggle');
-chatToggle.onclick = () => chatWrapper.classList.toggle('active');
-document.getElementById('chatUser').textContent = localStorage.getItem('chatName') || 'Invité';
+const toolbar = document.querySelector('.cesium-viewer-toolbar');
+const chatBtn = document.createElement('button');
+chatBtn.className = 'cesium-button cesium-toolbar-button';
+function updateChatBtn(){ chatBtn.textContent = (localStorage.getItem('chatName') || 'Invité') + ' 💬'; }
+updateChatBtn();
+chatBtn.onclick = () => chatWrapper.classList.toggle('active');
+toolbar.appendChild(chatBtn);
+const locBtn = document.createElement('button');
+locBtn.className = 'cesium-button cesium-toolbar-button';
+locBtn.textContent = '📍';
+locBtn.title = 'Partager ma localisation';
+locBtn.onclick = () => shareLocation();
+toolbar.appendChild(locBtn);
 
 const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 handler.setInputAction(function(click){
@@ -179,6 +189,23 @@ function removeLocation(id){
   }
 }
 
+function shareLocation(){
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(pos => {
+    const {latitude, longitude} = pos.coords;
+    viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1000000)});
+    ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
+    status = 'localized';
+    const sel = document.getElementById('statusSelect');
+    sel.value = 'localized';
+    ws.send(JSON.stringify({type:'status', status:'localized'}));
+    if (client_id && clients[client_id]) {
+      clients[client_id].status = 'localized';
+      renderUsers();
+    }
+  });
+}
+
 /* =========================
    SOCKET
 ========================= */
@@ -207,11 +234,9 @@ function connect(){
     if (!name) name = localStorage.getItem('chatName') || 'Invité';
     // login première room : soit "general", soit celle de l'URL si présente
     loginRoom([...rooms.keys()][0]);
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(pos => {
-        const {latitude, longitude} = pos.coords;
-        viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1000000)});
-        ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({name:'geolocation'}).then(res => {
+        if (res.state === 'granted') shareLocation();
       });
     }
   };
@@ -243,7 +268,7 @@ function chooseName(){
     const newName = prompt('Votre pseudo ?') || 'Invité';
     name = newName;
     localStorage.setItem('chatName', name);
-    document.getElementById('chatUser').textContent = name;
+    updateChatBtn();
     ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
   }
 }
@@ -306,7 +331,7 @@ function onmessage(e){
       if (client_id && data.client_id == client_id) {
         name = data.client_name;
         localStorage.setItem('chatName', name);
-        document.getElementById('chatUser').textContent = name;
+        updateChatBtn();
         if (locationEntities[client_id]) {
           locationEntities[client_id].label.text = name;
           locationEntities[client_id].properties.name = name;
@@ -525,7 +550,14 @@ function renderUsers(){
     div.className = 'item';
 
     const dot = document.createElement('span');
-    dot.className = 'dot ' + (info.status === 'busy' ? 'busy' : (info.status === 'away' ? 'away' : 'ok'));
+    let cls = 'ok';
+    switch(info.status){
+      case 'busy': cls = 'busy'; break;
+      case 'away': cls = 'away'; break;
+      case 'localized': cls = 'localized'; break;
+      case 'invisible': cls = 'invisible'; break;
+    }
+    dot.className = 'dot ' + cls;
     div.appendChild(dot);
 
     const label = document.createElement('span');
