@@ -472,11 +472,11 @@ function shareLocation(){
     }
     ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
   }, err => {
-    console.error('Erreur de localisation :', err);
+    console.warn('Erreur de localisation :', err.message);
   }, {
     enableHighAccuracy: true,
-    maximumAge: 0,
-    timeout: 5000
+    maximumAge: 60000,
+    timeout: 15000
   });
 
 }
