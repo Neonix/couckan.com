@@ -134,7 +134,7 @@ chatBtn.className = 'cesium-button cesium-toolbar-button';
 function updateChatBtn(){
   const uname = localStorage.getItem('chatName') || 'Invité';
   const count = Object.keys(clients).length;
-  chatBtn.textContent = `${uname} 💬 (${count})`;
+  chatBtn.textContent = `👥 (${count})`;
 }
 updateChatBtn();
 chatBtn.onclick = () => {
