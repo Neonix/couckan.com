@@ -9,12 +9,9 @@ require_once __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/../../config.php';
 
 
-require_once __DIR__ . '/../../vendor/autoload.php';
-require_once __DIR__ . '/../../config.php';
 
 
-
-if (isset($SSL_CONTEXT)) {
+if (isset($SSL_CONTEXT) && $_config['ssl'] && !$_config['docker']) {
     $api = new Worker('http://0.0.0.0:8002', $SSL_CONTEXT);
     $api->transport = 'ssl';
 } else {

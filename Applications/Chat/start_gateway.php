@@ -7,14 +7,18 @@ require_once __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/../../config.php';
 
 
-//Gateway
-if (isset($SSL_CONTEXT)) {
+
+
+//Gateway 
+if (isset($SSL_CONTEXT) && $_config['ssl'] && !$_config['docker']) {
     $gateway = new Gateway("Websocket://0.0.0.0:7272", $SSL_CONTEXT);
     $gateway->transport = 'ssl';
 } else {
     //Socket
     $gateway = new Gateway("Websocket://0.0.0.0:7272");
 }
+
+
 
 $gateway->name = 'ChatGateway';
 $gateway->count = 2;

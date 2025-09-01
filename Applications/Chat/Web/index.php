@@ -1,3 +1,6 @@
+<?php
+include __DIR__ . '/../../../config.php';
+?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -124,8 +127,23 @@ if (q.get('room')) rooms.set(q.get('room'), {visibility:'private', creator_id:nu
 /* =========================
    SOCKET
 ========================= */
+
+//  ws = new WebSocket('wss://' + document.domain + ':7272');
 function connect(){
-  ws = new WebSocket('wss://' + document.domain + ':7272');
+
+  <?php
+  if ($_config['docker']) {
+    echo "ws = new WebSocket(
+      (location.protocol === 'https:' ? 'wss://' : 'ws://') +
+      location.host +
+      '/ws/'
+    );";
+  } else {
+      // WebServer
+      echo "ws = new WebSocket('wss://' + document.domain + ':7272');";
+  }
+  ?>
+
 
   ws.onopen = () => {
     if (!name) name = localStorage.getItem('chatName') || 'Invité';

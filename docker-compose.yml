@@ -6,15 +6,27 @@ services:
     container_name: couckan-app
     depends_on:
       - db
-    ports:
-      - "443:443"     # HTTPS
-      - "8002:8002"   # HTTP
-      - "7272:7272"   # WebSocket
-      - "1236:1236"   # Register
+    expose:
+      - "8002"
+      - "7272"
+      - "1236"
+      - "55151"
     volumes:
       - ./:/var/www/couckan/
     command: php start.php start   # foreground obligatoire
-
+    
+  nginx:
+    image: nginx:alpine
+    container_name: couckan-nginx
+    depends_on:
+      - workerman
+    ports:
+      - "443:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./localhost.crt:/etc/nginx/certs/localhost.crt:ro
+      - ./localhost.key:/etc/nginx/certs/localhost.key:ro
+    restart: always
   db:
     image: mysql:8.0
     container_name: couckan-db

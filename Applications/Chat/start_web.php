@@ -11,13 +11,14 @@ require_once __DIR__ . '/ChatDb.php';
 
 
 
-if (isset($SSL_CONTEXT)) {
+if (isset($SSL_CONTEXT) && $_config['ssl'] && !$_config['docker']) {
     $web = new Worker("http://0.0.0.0:443", $SSL_CONTEXT);
     $web->transport = 'ssl';
 } else {
     // WebServer
     $web = new Worker("http://0.0.0.0:55151");
 }
+
 //$web->reloadable = true; // REload debug
 $web->count = 2;
 

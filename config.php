@@ -4,28 +4,35 @@
 
 
 $_config = array(
+    'docker' => true,
     'localdev' => true,
     'ssl' => true,
-    'geoip' => true
+    'geoip' => false
+
 );
 
-
+//if($_config['docker'])
+//    $SIGNALING_ADDRESS = 
 $SIGNALING_ADDRESS = 'wss://couckan.com:8877';
 $SIGNALING_ADDRESS = 'wss://localhost:8877';
 
 /***
  * Exemple de configuation SSL
  *
- */   $SSL_CONTEXT = array(
-        //http://php.net/manual/zh/context.ssl.php
-        'ssl' => array(
-            //local_cert.crt, local_pk.key
-            'local_cert'        => '/etc/letsencrypt/live/couckan.com/cert.pem',
-            'local_pk'          => '/etc/letsencrypt/live/couckan.com/privkey.pem',
-            'verify_peer'       => false,
-            'allow_self_signed' => true,
-        )
+ */ 
+
+$SSL_CONTEXT = array(
+    'ssl' => array(
+        //local_cert.crt, local_pk.key
+        'local_cert'        => '/etc/letsencrypt/live/couckan.com/fullchain.pem',
+        'local_pk'          => '/etc/letsencrypt/live/couckan.com/privkey.pem',
+        'verify_peer'       => false,
+        'verify_peer_name'  => false,
+        'allow_self_signed' => true,
+    )
 );
+
+
 
 
 $SSL_CONTEXT = array(

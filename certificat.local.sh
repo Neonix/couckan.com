@@ -2,6 +2,8 @@ COMMAND="openssl req -x509 -out localhost.crt -keyout localhost.key -newkey rsa:
 
 echo $COMMAND
 
+
+docker compose down -v || true
 # Construire l’image
 docker-compose build --no-cache
 # Lancer la stack
