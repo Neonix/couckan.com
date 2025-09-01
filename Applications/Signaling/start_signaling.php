@@ -5,7 +5,7 @@ require_once __DIR__ . '/../../config.php';
 use Workerman\Worker;
 
 // Map of room id to connections
-$subject_connnection_map = [];
+$subject_connection_map = [];
 
 // Create websocket server for signaling
 if (isset($SSL_CONTEXT) && $_config['ssl'] && !$_config['docker']) {
@@ -44,25 +44,25 @@ $signal->onClose = function ($connection) {
 };
 
 function subscribe($subject, $connection) {
-    global $subject_connnection_map;
+    global $subject_connection_map;
     $connection->subjects[$subject] = $subject;
-    $subject_connnection_map[$subject][$connection->id] = $connection;
+    $subject_connection_map[$subject][$connection->id] = $connection;
 }
 
 function unsubscribe($subject, $connection) {
-    global $subject_connnection_map;
-    unset($subject_connnection_map[$subject][$connection->id]);
-    if (empty($subject_connnection_map[$subject])) {
-        unset($subject_connnection_map[$subject]);
+    global $subject_connection_map;
+    unset($subject_connection_map[$subject][$connection->id]);
+    if (empty($subject_connection_map[$subject])) {
+        unset($subject_connection_map[$subject]);
     }
 }
 
 function publish($subject, $event, $data, $exclude) {
-    global $subject_connnection_map;
-    if (empty($subject_connnection_map[$subject])) {
+    global $subject_connection_map;
+    if (empty($subject_connection_map[$subject])) {
         return;
     }
-    foreach ($subject_connnection_map[$subject] as $connection) {
+    foreach ($subject_connection_map[$subject] as $connection) {
         if ($connection === $exclude) {
             continue;
         }
