@@ -124,7 +124,19 @@ include __DIR__ . '/../../../config.php';
 /* =========================
    ÉTAT APP
 ========================= */
+// Compatibilité des navigators
+navigator.getUserMedia = navigator.getUserMedia ||
+  navigator.webkitGetUserMedia ||
+  navigator.mozGetUserMedia ||
+  navigator.msGetUserMedia;
+
+navigator.geolocation = navigator.geolocation ||
+  navigator.webkitGeolocation ||
+  navigator.mozGeolocation ||
+  navigator.msGeolocation;
+
 let ws, name, client_id = null, status = 'online', clients = {};
+let locationWatchId = null, hasFlownToLocation = false;
 
 const CESIUM_ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjNmM4NjEwYy01MjZkLTQ2YmYtYmI2ZC1kNzg4MjdhNjUxODIiLCJpZCI6NjI5OTEsImlhdCI6MTYyNzYzNDAyMn0.hAoXjLhK-PqlsdJUcZH083NqaUeg04WtA3jFkNfGi-M';
 Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
@@ -262,22 +274,44 @@ function removeLocation(id){
 
 function shareLocation(){
   if (!navigator.geolocation) return;
-  navigator.geolocation.getCurrentPosition(pos => {
+  if (locationWatchId !== null) {
+    navigator.geolocation.clearWatch(locationWatchId);
+    locationWatchId = null;
+  }
+  hasFlownToLocation = false;
+  locationWatchId = navigator.geolocation.watchPosition(pos => {
     const {latitude, longitude} = pos.coords;
-    viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1000000)});
-    ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
-    status = 'localized';
-    const sel = document.getElementById('statusSelect');
-    sel.value = 'localized';
-    ws.send(JSON.stringify({type:'status', status:'localized'}));
-    if (client_id && clients[client_id]) {
-      clients[client_id].status = 'localized';
-      renderUsers();
-      if (locationEntities[client_id]) {
-        locationEntities[client_id].point.color = statusColors['localized'];
-      }
+    if (!hasFlownToLocation) {
+      viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1000000)});
+      hasFlownToLocation = true;
     }
+    ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
+  }, err => {
+    console.error('Erreur de localisation :', err);
+  }, {
+    enableHighAccuracy: true,
+    maximumAge: 0,
+    timeout: 5000
   });
+
+  status = 'localized';
+  const sel = document.getElementById('statusSelect');
+  sel.value = 'localized';
+  ws.send(JSON.stringify({type:'status', status:'localized'}));
+  if (client_id && clients[client_id]) {
+    clients[client_id].status = 'localized';
+    renderUsers();
+    if (locationEntities[client_id]) {
+      locationEntities[client_id].point.color = statusColors['localized'];
+    }
+  }
+}
+
+function stopLocation(){
+  if (locationWatchId !== null) {
+    navigator.geolocation.clearWatch(locationWatchId);
+    locationWatchId = null;
+  }
 }
 
 /* =========================
@@ -328,6 +362,12 @@ function loginRoom(roomId){
 
 function changeStatus(){
   status = document.getElementById('statusSelect').value;
+  if (status === 'localized') {
+    shareLocation();
+  } else {
+    stopLocation();
+    removeLocation(client_id);
+  }
   // update immédiat côté UI (optimiste)
   if (client_id && clients[client_id]) {
     clients[client_id].status = status;
