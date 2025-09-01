@@ -125,6 +125,9 @@ const viewer = new Cesium.Viewer('cesiumContainer');
 const locationEntities = {};
 const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
+// place Cesium toolbar above chat overlay so buttons stay visible
+document.body.appendChild(toolbar);
+toolbar.style.zIndex = 30;
 const chatBtn = document.createElement('button');
 chatBtn.className = 'cesium-button cesium-toolbar-button';
 function updateChatBtn(){
