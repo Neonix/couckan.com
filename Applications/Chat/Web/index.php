@@ -169,7 +169,8 @@ function getUserMedia(constraints){
   });
 }
 
-let ws, name, client_id = null, status = 'online', clients = {};
+const storedId = localStorage.getItem('chatUid');
+let ws, name, client_id = storedId, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false;
 let notifState = 'all', locationState = 'all';
 const mutedUsers = new Set();
@@ -226,6 +227,13 @@ function updateChatBtn(){
 }
 updateChatBtn();
 chatBtn.onclick = () => {
+  if (!localStorage.getItem('chatName')) {
+    const newName = prompt('Choisis un pseudo') || 'Invité';
+    name = newName;
+    localStorage.setItem('chatName', name);
+    updateChatBtn();
+    ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
+  }
   chatWrapper.classList.toggle('active');
   if (chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink');
   document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
@@ -423,13 +431,17 @@ function createPeer(id){
     const stream = (e.streams && e.streams[0]) ? e.streams[0] : new MediaStream([e.track]);
     addRemoteStream(id, stream);
   };
+  let negotiating = false;
   pc.onnegotiationneeded = async () => {
+    if (negotiating || pc.signalingState !== 'stable') return;
+    negotiating = true;
     try {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      signalSend({type:'offer', from:client_id, to:id, sdp:offer});
+      await pc.setLocalDescription(await pc.createOffer());
+      signalSend({type:'offer', from:client_id, to:id, sdp:pc.localDescription});
     } catch(err){
       console.error('negotiation', err);
+    } finally {
+      negotiating = false;
     }
   };
   pc.onconnectionstatechange = () => {
@@ -642,7 +654,7 @@ function loginRoom(roomId){
   // reset UI utilisateurs (évite l'affichage d'une ancienne liste avant le "welcome")
   clients = {};
   renderUsers();
-  ws.send(JSON.stringify({type:'login', client_name:name, room_id:roomId, status, ua: navigator.userAgent}));
+  ws.send(JSON.stringify({type:'login', client_name:name, room_id:roomId, status, ua: navigator.userAgent, client_uuid: client_id}));
 }
 
 function changeStatus(){
@@ -680,7 +692,8 @@ function onmessage(e){
 
     case 'welcome': {
       // Fixe mon id et remplace la liste utilisateurs par celle de la room
-      if (!client_id) client_id = data.self_id;
+      client_id = data.self_id;
+      localStorage.setItem('chatUid', client_id);
       clients = data.client_list || {};
       renderUsers();
 
