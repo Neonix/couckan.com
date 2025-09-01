@@ -80,6 +80,11 @@ class Events
                 // n'a pas partagé sa véritable localisation
                 $randLat = mt_rand(-50, 50) / 1000; // +/-0.05°
                 $randLon = mt_rand(-50, 50) / 1000;
+
+                // stocke la position dans la session pour la partager entre les workers
+                $_SESSION['lat'] = $randLat;
+                $_SESSION['lon'] = $randLon;
+
                 self::$locations[$client_id] = [
                     'client_id'   => $client_id,
                     'client_name' => $client_name,
@@ -90,9 +95,24 @@ class Events
                 $loc['type'] = 'location';
                 Gateway::sendToAll(json_encode($loc));
 
+                // récupère les positions de tous les clients connectés
+                $all_sessions = Gateway::getAllClientSessions();
+                $locations = [];
+                foreach ($all_sessions as $id => $sess) {
+                    if (!isset($sess['lat'], $sess['lon'])) {
+                        continue;
+                    }
+                    $locations[] = [
+                        'client_id'   => $id,
+                        'client_name' => $sess['client_name'] ?? 'Invité',
+                        'lat'         => $sess['lat'],
+                        'lon'         => $sess['lon'],
+                    ];
+                }
+
                 Gateway::sendToClient($client_id, json_encode([
-                    'type' => 'locations',
-                    'locations' => array_values(self::$locations)
+                    'type'      => 'locations',
+                    'locations' => $locations
                 ]));
 
                 ChatDb::logRequest('ws_login', $ua, '');
@@ -115,10 +135,13 @@ class Events
 
                 if ($new === 'invisible' && isset(self::$locations[$client_id])) {
                     unset(self::$locations[$client_id]);
+                    unset($_SESSION['lat'], $_SESSION['lon']);
                     Gateway::sendToAll(json_encode(['type'=>'location_remove','client_id'=>$client_id]));
                 } elseif ($new !== 'invisible' && !isset(self::$locations[$client_id])) {
                     $randLat = mt_rand(-50, 50) / 1000;
                     $randLon = mt_rand(-50, 50) / 1000;
+                    $_SESSION['lat'] = $randLat;
+                    $_SESSION['lon'] = $randLon;
                     self::$locations[$client_id] = [
                         'client_id'   => $client_id,
                         'client_name' => $_SESSION['client_name'] ?? 'Invité',
@@ -163,6 +186,8 @@ class Events
                     'lat'         => (float)$lat,
                     'lon'         => (float)$lon,
                 ];
+                $_SESSION['lat'] = (float)$lat;
+                $_SESSION['lon'] = (float)$lon;
                 $msg = self::$locations[$client_id];
                 $msg['type'] = 'location';
                 Gateway::sendToAll(json_encode($msg));
