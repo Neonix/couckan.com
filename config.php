@@ -12,8 +12,8 @@ $_config = array(
 
 //if($_config['docker'])
 //    $SIGNALING_ADDRESS = 
-$SIGNALING_ADDRESS = 'wss://couckan.com:8877';
-$SIGNALING_ADDRESS = 'wss://localhost:8877';
+$SIGNALING_ADDRESS = 'wss://couckan.com/signal';
+$SIGNALING_ADDRESS = 'wss://localhost/signal';
 
 /***
  * Exemple de configuation SSL

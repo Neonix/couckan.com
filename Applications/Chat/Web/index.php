@@ -18,9 +18,9 @@ include __DIR__ . '/../../../config.php';
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
-    #chatWrapper{position:fixed;top:0;left:0;right:0;bottom:0;display:none;min-height:100vh;height:100dvh;overflow:hidden;z-index:10}
+    #chatWrapper{position:fixed;left:0;right:0;bottom:0;top:auto;display:none;height:40vh;max-height:400px;overflow:hidden;z-index:10}
     #chatWrapper.active{display:flex}
-    .cesium-viewer-toolbar{z-index:20}
+    .cesium-viewer-toolbar{z-index:30}
     .cesium-toolbar-button{margin:2px}
     .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
     .sidebar details{display:flex;flex-direction:column;gap:.75rem;padding:1rem}
@@ -60,12 +60,12 @@ include __DIR__ . '/../../../config.php';
     .hint{font-size:.8rem;color:#a3b2c7}
     .mobile-nav{display:none}
     @media (max-width:768px){
-      #chatWrapper{flex-direction:column;overflow:hidden}
+      #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none}
       .chat{order:1;width:100%;margin-bottom:60px}
-      .sidebar{position:fixed;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
+      .sidebar{position:absolute;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
       .sidebar.users{left:auto;right:0;transform:translateX(100%)}
       .sidebar.open{transform:translateX(0)}
-      .mobile-nav{display:flex;justify-content:space-around;gap:.5rem;background:var(--panel);position:fixed;bottom:0;left:0;right:0;z-index:25;padding:.5rem}
+      .mobile-nav{display:flex;justify-content:space-around;gap:.5rem;background:var(--panel);position:absolute;bottom:0;left:0;right:0;z-index:25;padding:.5rem}
       .mobile-nav button{flex:1;border:none;background:var(--muted);color:var(--text);border-radius:6px;padding:.5rem}
       .cesium-viewer-toolbar{display:flex;flex-wrap:wrap;gap:.4rem}
     }
@@ -165,7 +165,6 @@ function toggleUsers(){
   document.querySelector('.sidebar.rooms').classList.remove('open');
 }
 // place Cesium toolbar above chat overlay so buttons stay visible
-document.body.appendChild(toolbar);
 toolbar.style.zIndex = 30;
 const chatBtn = document.createElement('button');
 chatBtn.className = 'cesium-button cesium-toolbar-button';
