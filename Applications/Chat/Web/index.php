@@ -68,6 +68,7 @@ include __DIR__ . '/../../../config.php';
     #callOverlay.active{display:flex}
     #callOverlay video{max-width:90%;max-height:80%;background:#000;border-radius:8px;margin:.5rem}
     #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
+    #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
     @media (max-width:768px){
       #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none}
       .chat{order:1;width:100%;margin-bottom:60px}
@@ -131,7 +132,13 @@ include __DIR__ . '/../../../config.php';
   <div id="callOverlay">
     <video id="localVideo" autoplay muted playsinline></video>
     <div id="remoteVideos"></div>
-    <button class="btn" onclick="hangup()">Raccrocher</button>
+    <div id="callControls">
+      <button class="btn secondary" id="micBtn" onclick="toggleMic()">Couper micro</button>
+      <button class="btn secondary" id="videoBtn" onclick="toggleVideo()">Désactiver vidéo</button>
+      <button class="btn secondary" onclick="toggleFullscreen()">Plein écran</button>
+      <button class="btn secondary" onclick="recall()">Rappeler</button>
+      <button class="btn" onclick="hangup()">Raccrocher</button>
+    </div>
   </div>
 
 <script>
@@ -155,6 +162,8 @@ let notifState = 'all', locationState = 'all';
 const mutedUsers = new Set();
 const SIGNALING_URL = '<?php echo $SIGNALING_ADDRESS; ?>';
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
+let lastCallRoom = null, lastCallVideo = false;
+let micEnabled = true, videoEnabled = true;
 
 const CESIUM_ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjNmM4NjEwYy01MjZkLTQ2YmYtYmI2ZC1kNzg4MjdhNjUxODIiLCJpZCI6NjI5OTEsImlhdCI6MTYyNzYzNDAyMn0.hAoXjLhK-PqlsdJUcZH083NqaUeg04WtA3jFkNfGi-M';
 Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
@@ -320,6 +329,10 @@ function joinGroup(id){
 function joinCall(room, video){
   if (callRoom) hangup();
   callRoom = room; callVideo = video;
+  lastCallRoom = room; lastCallVideo = video;
+  micEnabled = true; videoEnabled = video;
+  document.getElementById('micBtn').textContent = 'Couper micro';
+  document.getElementById('videoBtn').textContent = video ? 'Désactiver vidéo' : 'Activer vidéo';
   document.getElementById('callOverlay').classList.add('active');
   navigator.mediaDevices.getUserMedia({audio:true, video:video}).then(stream => {
     localStream = stream;
@@ -376,7 +389,10 @@ function createPeer(id){
   peers[id] = pc;
   if (localStream) localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
   pc.onicecandidate = e => { if (e.candidate) signalSend({type:'candidate', from:client_id, to:id, candidate:e.candidate}); };
-  pc.ontrack = e => { addRemoteStream(id, e.streams[0]); };
+  pc.ontrack = e => {
+    const stream = (e.streams && e.streams[0]) ? e.streams[0] : new MediaStream([e.track]);
+    addRemoteStream(id, stream);
+  };
   return pc;
 }
 
@@ -389,6 +405,46 @@ function addRemoteStream(id, stream){
     document.getElementById('remoteVideos').appendChild(v);
   }
   v.srcObject = stream;
+}
+
+function toggleMic(){
+  if (!localStream) return;
+  const track = localStream.getAudioTracks()[0];
+  if (!track) return;
+  micEnabled = !track.enabled;
+  track.enabled = micEnabled;
+  document.getElementById('micBtn').textContent = micEnabled ? 'Couper micro' : 'Activer micro';
+}
+
+function toggleVideo(){
+  if (!localStream) return;
+  let track = localStream.getVideoTracks()[0];
+  if (track){
+    videoEnabled = !track.enabled;
+    track.enabled = videoEnabled;
+    document.getElementById('videoBtn').textContent = videoEnabled ? 'Désactiver vidéo' : 'Activer vidéo';
+  } else {
+    navigator.mediaDevices.getUserMedia({video:true}).then(stream=>{
+      track = stream.getVideoTracks()[0];
+      localStream.addTrack(track);
+      Object.values(peers).forEach(pc=>pc.addTrack(track, localStream));
+      videoEnabled = true;
+      document.getElementById('videoBtn').textContent = 'Désactiver vidéo';
+    }).catch(err=>console.error('video', err));
+  }
+}
+
+function toggleFullscreen(){
+  const overlay = document.getElementById('callOverlay');
+  if (!document.fullscreenElement){
+    overlay.requestFullscreen().catch(()=>{});
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+function recall(){
+  if (lastCallRoom) joinCall(lastCallRoom, lastCallVideo);
 }
 
 function hangup(){
