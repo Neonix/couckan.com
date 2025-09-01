@@ -13,7 +13,7 @@ include __DIR__ . '/../../../config.php';
     :root{
       --bg:#0f172a; --panel:#1e293b; --muted:#334155; --muted-2:#475569;
       --accent:#0ea5e9; --text:#f8fafc; --sub:#94a3b8;
-      --ok:#22c55e; --busy:#f97316; --away:#ef4444; --warn:#facc15; --localized:#3b82f6; --invisible:#6b7280;
+      --ok:#22c55e; --busy:#f97316; --away:#ef4444; --warn:#facc15; --invisible:#6b7280;
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
@@ -55,7 +55,7 @@ include __DIR__ . '/../../../config.php';
     .input textarea{flex:1;min-height:42px;max-height:160px;resize:vertical;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.6rem;border-radius:8px}
     .input button{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:.55rem 1rem;cursor:pointer}
     .dot{width:10px;height:10px;border-radius:50%}
-    .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)} .dot.localized{background:var(--localized)} .dot.invisible{background:var(--invisible)}
+    .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)} .dot.invisible{background:var(--invisible)}
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
     .mobile-nav{display:none}
@@ -116,7 +116,6 @@ include __DIR__ . '/../../../config.php';
       <div id="users" class="list"></div>
       <select id="statusSelect" class="select" onchange="changeStatus()">
         <option value="online">🟢 En ligne</option>
-        <option value="localized">📍 Localisé</option>
         <option value="away">🔴 Absent</option>
         <option value="busy">🟠 Occupé</option>
         <option value="invisible">⚫ Invisible</option>
@@ -170,7 +169,6 @@ const statusColors = {
   online: Cesium.Color.fromCssColorString('#22c55e'),
   busy: Cesium.Color.fromCssColorString('#f97316'),
   away: Cesium.Color.fromCssColorString('#ef4444'),
-  localized: Cesium.Color.fromCssColorString('#3b82f6'),
   invisible: Cesium.Color.fromCssColorString('#6b7280')
 };
 const chatWrapper = document.getElementById('chatWrapper');
@@ -481,17 +479,6 @@ function shareLocation(){
     timeout: 5000
   });
 
-  status = 'localized';
-  const sel = document.getElementById('statusSelect');
-  sel.value = 'localized';
-  ws.send(JSON.stringify({type:'status', status:'localized'}));
-  if (client_id && clients[client_id]) {
-    clients[client_id].status = 'localized';
-    renderUsers();
-    if (locationEntities[client_id]) {
-      locationEntities[client_id].point.color = statusColors['localized'];
-    }
-  }
 }
 
 function stopLocation(){
@@ -499,6 +486,8 @@ function stopLocation(){
     navigator.geolocation.clearWatch(locationWatchId);
     locationWatchId = null;
   }
+  if (ws) ws.send(JSON.stringify({type:'location_remove'}));
+  removeLocation(client_id);
 }
 
 /* =========================
@@ -549,13 +538,6 @@ function loginRoom(roomId){
 
 function changeStatus(){
   status = document.getElementById('statusSelect').value;
-  if (status === 'localized') {
-    shareLocation();
-  } else {
-    stopLocation();
-    removeLocation(client_id);
-  }
-  // update immédiat côté UI (optimiste)
   if (client_id && clients[client_id]) {
     clients[client_id].status = status;
     renderUsers();
@@ -563,7 +545,6 @@ function changeStatus(){
       locationEntities[client_id].point.color = statusColors[status] || Cesium.Color.CYAN;
     }
   }
-  // et propagation serveur
   ws.send(JSON.stringify({type:'status', status}));
 }
 
@@ -904,7 +885,6 @@ function renderUsers(){
     switch(info.status){
       case 'busy': cls = 'busy'; break;
       case 'away': cls = 'away'; break;
-      case 'localized': cls = 'localized'; break;
       case 'invisible': cls = 'invisible'; break;
     }
     dot.className = 'dot ' + cls;

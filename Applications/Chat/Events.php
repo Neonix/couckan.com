@@ -132,26 +132,6 @@ class Events
                     'status'    => $new,
                 ];
                 Gateway::sendToGroup($room_id, json_encode($msg));
-
-                if ($new === 'invisible' && isset(self::$locations[$client_id])) {
-                    unset(self::$locations[$client_id]);
-                    unset($_SESSION['lat'], $_SESSION['lon']);
-                    Gateway::sendToAll(json_encode(['type'=>'location_remove','client_id'=>$client_id]));
-                } elseif ($new !== 'invisible' && !isset(self::$locations[$client_id])) {
-                    $randLat = mt_rand(-50, 50) / 1000;
-                    $randLon = mt_rand(-50, 50) / 1000;
-                    $_SESSION['lat'] = $randLat;
-                    $_SESSION['lon'] = $randLon;
-                    self::$locations[$client_id] = [
-                        'client_id'   => $client_id,
-                        'client_name' => $_SESSION['client_name'] ?? 'Invité',
-                        'lat'         => $randLat,
-                        'lon'         => $randLon,
-                    ];
-                    $loc = self::$locations[$client_id];
-                    $loc['type'] = 'location';
-                    Gateway::sendToAll(json_encode($loc));
-                }
                 return;
             }
 
@@ -191,14 +171,15 @@ class Events
                 $msg = self::$locations[$client_id];
                 $msg['type'] = 'location';
                 Gateway::sendToAll(json_encode($msg));
-                // passe automatiquement le statut en "localized"
-                $_SESSION['status'] = 'localized';
-                $room_id = $_SESSION['room_id'] ?? 'general';
-                Gateway::sendToGroup($room_id, json_encode([
-                    'type'      => 'status',
-                    'client_id' => $client_id,
-                    'status'    => 'localized',
-                ]));
+                return;
+            }
+
+            case 'location_remove': {
+                if (isset(self::$locations[$client_id])) {
+                    unset(self::$locations[$client_id]);
+                    unset($_SESSION['lat'], $_SESSION['lon']);
+                    Gateway::sendToAll(json_encode(['type'=>'location_remove','client_id'=>$client_id]));
+                }
                 return;
             }
 
