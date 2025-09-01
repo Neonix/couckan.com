@@ -18,7 +18,7 @@ include __DIR__ . '/../../../config.php';
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
-    #chatWrapper{position:absolute;top:0;left:0;right:0;bottom:0;display:none;min-height:100vh;height:100dvh;overflow:hidden;z-index:10}
+    #chatWrapper{position:fixed;top:0;left:0;right:0;bottom:0;display:none;min-height:100vh;height:100dvh;overflow:hidden;z-index:10}
     #chatWrapper.active{display:flex}
     .cesium-viewer-toolbar{z-index:20}
     .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
@@ -58,7 +58,7 @@ include __DIR__ . '/../../../config.php';
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
     @media (max-width:768px){
-      #chatWrapper{flex-direction:column;height:auto;overflow:auto}
+      #chatWrapper{flex-direction:column;overflow:auto}
       .chat{order:1;width:100%}
       .sidebar{flex:0 0 100%;width:100%;height:auto}
       .sidebar.rooms{order:2}
@@ -129,6 +129,13 @@ const viewer = new Cesium.Viewer('cesiumContainer', {
   });
   
 const locationEntities = {};
+const statusColors = {
+  online: Cesium.Color.fromCssColorString('#22c55e'),
+  busy: Cesium.Color.fromCssColorString('#f97316'),
+  away: Cesium.Color.fromCssColorString('#ef4444'),
+  localized: Cesium.Color.fromCssColorString('#3b82f6'),
+  invisible: Cesium.Color.fromCssColorString('#6b7280')
+};
 const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
 // place Cesium toolbar above chat overlay so buttons stay visible
@@ -153,6 +160,10 @@ locBtn.textContent = '📍';
 locBtn.title = 'Partager ma localisation';
 locBtn.onclick = () => shareLocation();
 toolbar.appendChild(locBtn);
+const homeBtn = toolbar.querySelector('.cesium-home-button');
+if (homeBtn) {
+  homeBtn.addEventListener('click', () => chatWrapper.classList.remove('active'));
+}
 
 if (window.matchMedia('(max-width:768px)').matches) {
   const usersBtn = document.createElement('button');
@@ -195,10 +206,12 @@ if (q.get('room')) rooms.set(q.get('room'), {visibility:'private', creator_id:nu
 function addOrUpdateLocation(loc){
   const id = loc.client_id;
   let ent = locationEntities[id];
+  const st = (clients[id] && clients[id].status) || 'online';
+  const col = statusColors[st] || Cesium.Color.CYAN;
   if (!ent){
     ent = viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat),
-      point: {pixelSize:10, color: Cesium.Color.CYAN},
+      point: {pixelSize:10, color: col},
       label: {text: loc.client_name, font:'14px sans-serif', verticalOrigin: Cesium.VerticalOrigin.BOTTOM},
       properties: {client_id: id, name: loc.client_name}
     });
@@ -207,6 +220,7 @@ function addOrUpdateLocation(loc){
     ent.position = Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat);
     ent.label.text = loc.client_name;
     ent.properties.name = loc.client_name;
+    ent.point.color = col;
   }
 }
 
@@ -230,6 +244,9 @@ function shareLocation(){
     if (client_id && clients[client_id]) {
       clients[client_id].status = 'localized';
       renderUsers();
+      if (locationEntities[client_id]) {
+        locationEntities[client_id].point.color = statusColors['localized'];
+      }
     }
   });
 }
@@ -286,6 +303,9 @@ function changeStatus(){
   if (client_id && clients[client_id]) {
     clients[client_id].status = status;
     renderUsers();
+    if (locationEntities[client_id]) {
+      locationEntities[client_id].point.color = statusColors[status] || Cesium.Color.CYAN;
+    }
   }
   // et propagation serveur
   ws.send(JSON.stringify({type:'status', status}));
@@ -347,6 +367,9 @@ function onmessage(e){
       if (!clients[data.client_id]) clients[data.client_id] = {name:'Utilisateur', status:data.status};
       clients[data.client_id].status = data.status;
       renderUsers();
+      if (locationEntities[data.client_id]) {
+        locationEntities[data.client_id].point.color = statusColors[data.status] || Cesium.Color.CYAN;
+      }
       break;
     }
 
