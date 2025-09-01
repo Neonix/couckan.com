@@ -156,6 +156,19 @@ navigator.geolocation = navigator.geolocation ||
   navigator.mozGeolocation ||
   navigator.msGeolocation;
 
+function getUserMedia(constraints){
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+    return navigator.mediaDevices.getUserMedia(constraints);
+  }
+  return new Promise((resolve, reject)=>{
+    if (navigator.getUserMedia){
+      navigator.getUserMedia(constraints, resolve, reject);
+    } else {
+      reject(new Error('getUserMedia not supported'));
+    }
+  });
+}
+
 let ws, name, client_id = null, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false;
 let notifState = 'all', locationState = 'all';
@@ -334,7 +347,7 @@ function joinCall(room, video){
   document.getElementById('micBtn').textContent = 'Couper micro';
   document.getElementById('videoBtn').textContent = video ? 'Désactiver vidéo' : 'Activer vidéo';
   document.getElementById('callOverlay').classList.add('active');
-  navigator.mediaDevices.getUserMedia({audio:true, video:video}).then(stream => {
+  getUserMedia({audio:true, video:video}).then(stream => {
     localStream = stream;
     document.getElementById('localVideo').srcObject = stream;
     connectSignal(room);
@@ -380,18 +393,39 @@ function handleSignal(msg){
       if (msg.to !== client_id) return;
       peers[msg.from]?.addIceCandidate(new RTCIceCandidate(msg.candidate));
       break;
+    case 'leave':
+      if (msg.from === client_id) return;
+      peers[msg.from]?.close();
+      delete peers[msg.from];
+      document.getElementById('remote_'+msg.from)?.remove();
+      break;
   }
 }
 
 function createPeer(id){
   if (peers[id]) return peers[id];
-  const pc = new RTCPeerConnection();
+  const pc = new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
   peers[id] = pc;
   if (localStream) localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
   pc.onicecandidate = e => { if (e.candidate) signalSend({type:'candidate', from:client_id, to:id, candidate:e.candidate}); };
   pc.ontrack = e => {
     const stream = (e.streams && e.streams[0]) ? e.streams[0] : new MediaStream([e.track]);
     addRemoteStream(id, stream);
+  };
+  pc.onnegotiationneeded = async () => {
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      signalSend({type:'offer', from:client_id, to:id, sdp:offer});
+    } catch(err){
+      console.error('negotiation', err);
+    }
+  };
+  pc.onconnectionstatechange = () => {
+    if (['disconnected','failed','closed'].includes(pc.connectionState)){
+      document.getElementById('remote_'+id)?.remove();
+      delete peers[id];
+    }
   };
   return pc;
 }
@@ -424,7 +458,7 @@ function toggleVideo(){
     track.enabled = videoEnabled;
     document.getElementById('videoBtn').textContent = videoEnabled ? 'Désactiver vidéo' : 'Activer vidéo';
   } else {
-    navigator.mediaDevices.getUserMedia({video:true}).then(stream=>{
+    getUserMedia({video:true}).then(stream=>{
       track = stream.getVideoTracks()[0];
       localStream.addTrack(track);
       Object.values(peers).forEach(pc=>pc.addTrack(track, localStream));
@@ -437,9 +471,9 @@ function toggleVideo(){
 function toggleFullscreen(){
   const overlay = document.getElementById('callOverlay');
   if (!document.fullscreenElement){
-    overlay.requestFullscreen().catch(()=>{});
+    (overlay.requestFullscreen || overlay.webkitRequestFullscreen || overlay.mozRequestFullScreen || overlay.msRequestFullscreen)?.call(overlay);
   } else {
-    document.exitFullscreen();
+    (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen)?.call(document);
   }
 }
 
@@ -448,10 +482,18 @@ function recall(){
 }
 
 function hangup(){
+  signalSend({type:'leave', from:client_id});
   Object.values(peers).forEach(pc=>pc.close());
   peers = {};
-  if (localStream) { localStream.getTracks().forEach(t=>t.stop()); localStream = null; }
+  if (localStream) {
+    localStream.getTracks().forEach(t=>t.stop());
+    document.getElementById('localVideo').srcObject = null;
+    localStream = null;
+  }
   if (signal) { signal.close(); signal = null; }
+  if (document.fullscreenElement){
+    (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen)?.call(document);
+  }
   callRoom = null;
   document.getElementById('remoteVideos').innerHTML = '';
   document.getElementById('callOverlay').classList.remove('active');
