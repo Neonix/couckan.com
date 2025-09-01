@@ -122,7 +122,12 @@ let ws, name, client_id = null, status = 'online', clients = {};
 
 const CESIUM_ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjNmM4NjEwYy01MjZkLTQ2YmYtYmI2ZC1kNzg4MjdhNjUxODIiLCJpZCI6NjI5OTEsImlhdCI6MTYyNzYzNDAyMn0.hAoXjLhK-PqlsdJUcZH083NqaUeg04WtA3jFkNfGi-M';
 Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
-const viewer = new Cesium.Viewer('cesiumContainer');
+
+const viewer = new Cesium.Viewer('cesiumContainer', {
+    geocoder:false, homeButton:true, baseLayerPicker:false, timeline:false, animation:false,
+    sceneModePicker:false, navigationHelpButton:false
+  });
+  
 const locationEntities = {};
 const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
