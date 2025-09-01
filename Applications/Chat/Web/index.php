@@ -21,6 +21,7 @@ include __DIR__ . '/../../../config.php';
     #chatWrapper{position:fixed;top:0;left:0;right:0;bottom:0;display:none;min-height:100vh;height:100dvh;overflow:hidden;z-index:10}
     #chatWrapper.active{display:flex}
     .cesium-viewer-toolbar{z-index:20}
+    .cesium-toolbar-button{margin:2px}
     .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
     .sidebar details{display:flex;flex-direction:column;gap:.75rem;padding:1rem}
     .sidebar summary{list-style:none;cursor:pointer}
@@ -57,12 +58,16 @@ include __DIR__ . '/../../../config.php';
     .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)} .dot.localized{background:var(--localized)} .dot.invisible{background:var(--invisible)}
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
+    .mobile-nav{display:none}
     @media (max-width:768px){
-      #chatWrapper{flex-direction:column;overflow:auto}
-      .chat{order:1;width:100%}
-      .sidebar{flex:0 0 100%;width:100%;height:auto}
-      .sidebar.rooms{order:2}
-      .sidebar.users{order:3}
+      #chatWrapper{flex-direction:column;overflow:hidden}
+      .chat{order:1;width:100%;margin-bottom:60px}
+      .sidebar{position:fixed;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
+      .sidebar.users{left:auto;right:0;transform:translateX(100%)}
+      .sidebar.open{transform:translateX(0)}
+      .mobile-nav{display:flex;justify-content:space-around;gap:.5rem;background:var(--panel);position:fixed;bottom:0;left:0;right:0;z-index:25;padding:.5rem}
+      .mobile-nav button{flex:1;border:none;background:var(--muted);color:var(--text);border-radius:6px;padding:.5rem}
+      .cesium-viewer-toolbar{display:flex;flex-wrap:wrap;gap:.4rem}
     }
   </style>
 </head>
@@ -109,12 +114,13 @@ include __DIR__ . '/../../../config.php';
       </select>
       </details>
   </aside>
+  <div class="mobile-nav">
+    <button onclick="toggleRooms()">Salles</button>
+    <button onclick="toggleUsers()">Utilisateurs</button>
+  </div>
   </div>
 
 <script>
-if (window.matchMedia('(max-width:768px)').matches) {
-  document.querySelectorAll('.sidebar details').forEach(d => d.removeAttribute('open'));
-}
 /* =========================
    ÉTAT APP
 ========================= */
@@ -138,6 +144,14 @@ const statusColors = {
 };
 const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
+function toggleRooms(){
+  document.querySelector('.sidebar.rooms').classList.toggle('open');
+  document.querySelector('.sidebar.users').classList.remove('open');
+}
+function toggleUsers(){
+  document.querySelector('.sidebar.users').classList.toggle('open');
+  document.querySelector('.sidebar.rooms').classList.remove('open');
+}
 // place Cesium toolbar above chat overlay so buttons stay visible
 document.body.appendChild(toolbar);
 toolbar.style.zIndex = 30;
@@ -152,6 +166,7 @@ updateChatBtn();
 chatBtn.onclick = () => {
   chatWrapper.classList.toggle('active');
   if (chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink');
+  document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
 };
 toolbar.appendChild(chatBtn);
 const locBtn = document.createElement('button');
@@ -162,7 +177,10 @@ locBtn.onclick = () => shareLocation();
 toolbar.appendChild(locBtn);
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
-  homeBtn.addEventListener('click', () => chatWrapper.classList.remove('active'));
+  homeBtn.addEventListener('click', () => {
+    chatWrapper.classList.remove('active');
+    document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
+  });
 }
 
 if (window.matchMedia('(max-width:768px)').matches) {
@@ -172,7 +190,8 @@ if (window.matchMedia('(max-width:768px)').matches) {
   usersBtn.title = 'Utilisateurs connectés';
   usersBtn.onclick = () => {
     chatWrapper.classList.add('active');
-    document.querySelector('.sidebar.users').scrollIntoView({behavior:'smooth'});
+    document.querySelector('.sidebar.users').classList.add('open');
+    document.querySelector('.sidebar.rooms').classList.remove('open');
   };
   toolbar.appendChild(usersBtn);
 }
