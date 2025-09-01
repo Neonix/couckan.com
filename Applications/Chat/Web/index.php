@@ -13,14 +13,14 @@ include __DIR__ . '/../../../config.php';
     :root{
       --bg:#0f172a; --panel:#1e293b; --muted:#334155; --muted-2:#475569;
       --accent:#0ea5e9; --text:#f8fafc; --sub:#94a3b8;
-      --ok:#22c55e; --busy:#f97316; --away:#ef4444; --warn:#facc15; --localized:#3b82f6; --invisible:#6b7280;
+      --ok:#22c55e; --busy:#f97316; --away:#ef4444; --warn:#facc15; --invisible:#6b7280;
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
-    #chatWrapper{position:fixed;top:0;left:0;right:0;bottom:0;display:none;min-height:100vh;height:100dvh;overflow:hidden;z-index:10}
+    #chatWrapper{position:fixed;left:0;right:0;bottom:0;top:auto;display:none;height:40vh;max-height:400px;overflow:hidden;z-index:10}
     #chatWrapper.active{display:flex}
-    .cesium-viewer-toolbar{z-index:20}
+    .cesium-viewer-toolbar{z-index:30}
     .cesium-toolbar-button{margin:2px}
     .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
     .sidebar details{display:flex;flex-direction:column;gap:.75rem;padding:1rem}
@@ -55,17 +55,26 @@ include __DIR__ . '/../../../config.php';
     .input textarea{flex:1;min-height:42px;max-height:160px;resize:vertical;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.6rem;border-radius:8px}
     .input button{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:.55rem 1rem;cursor:pointer}
     .dot{width:10px;height:10px;border-radius:50%}
-    .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)} .dot.localized{background:var(--localized)} .dot.invisible{background:var(--invisible)}
+    .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)} .dot.invisible{background:var(--invisible)}
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
     .mobile-nav{display:none}
+    .profile-popup{position:absolute;display:none;flex-direction:column;gap:.25rem;padding:.5rem;background:var(--panel);border:1px solid var(--muted-2);border-radius:8px;z-index:40;min-width:160px}
+    .profile-popup.active{display:flex}
+    .profile-popup .title{font-weight:700;margin-bottom:.25rem}
+    .profile-popup button{background:var(--muted);color:var(--text);border:none;border-radius:6px;padding:.3rem .5rem;cursor:pointer}
+    .profile-popup button:hover{background:var(--muted-2)}
+    #callOverlay{position:fixed;top:0;left:0;right:0;bottom:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.8);z-index:50}
+    #callOverlay.active{display:flex}
+    #callOverlay video{max-width:90%;max-height:80%;background:#000;border-radius:8px;margin:.5rem}
+    #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
     @media (max-width:768px){
-      #chatWrapper{flex-direction:column;overflow:hidden}
+      #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none}
       .chat{order:1;width:100%;margin-bottom:60px}
-      .sidebar{position:fixed;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
+      .sidebar{position:absolute;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
       .sidebar.users{left:auto;right:0;transform:translateX(100%)}
       .sidebar.open{transform:translateX(0)}
-      .mobile-nav{display:flex;justify-content:space-around;gap:.5rem;background:var(--panel);position:fixed;bottom:0;left:0;right:0;z-index:25;padding:.5rem}
+      .mobile-nav{display:flex;justify-content:space-around;gap:.5rem;background:var(--panel);position:absolute;bottom:0;left:0;right:0;z-index:25;padding:.5rem}
       .mobile-nav button{flex:1;border:none;background:var(--muted);color:var(--text);border-radius:6px;padding:.5rem}
       .cesium-viewer-toolbar{display:flex;flex-wrap:wrap;gap:.4rem}
     }
@@ -107,7 +116,6 @@ include __DIR__ . '/../../../config.php';
       <div id="users" class="list"></div>
       <select id="statusSelect" class="select" onchange="changeStatus()">
         <option value="online">🟢 En ligne</option>
-        <option value="localized">📍 Localisé</option>
         <option value="away">🔴 Absent</option>
         <option value="busy">🟠 Occupé</option>
         <option value="invisible">⚫ Invisible</option>
@@ -118,6 +126,12 @@ include __DIR__ . '/../../../config.php';
     <button onclick="toggleRooms()">Salles</button>
     <button onclick="toggleUsers()">Utilisateurs</button>
   </div>
+  </div>
+  <div id="profilePopup" class="profile-popup"></div>
+  <div id="callOverlay">
+    <video id="localVideo" autoplay muted playsinline></video>
+    <div id="remoteVideos"></div>
+    <button class="btn" onclick="hangup()">Raccrocher</button>
   </div>
 
 <script>
@@ -137,6 +151,10 @@ navigator.geolocation = navigator.geolocation ||
 
 let ws, name, client_id = null, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false;
+let notifState = 'all', locationState = 'all';
+const mutedUsers = new Set();
+const SIGNALING_URL = '<?php echo $SIGNALING_ADDRESS; ?>';
+let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 
 const CESIUM_ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjNmM4NjEwYy01MjZkLTQ2YmYtYmI2ZC1kNzg4MjdhNjUxODIiLCJpZCI6NjI5OTEsImlhdCI6MTYyNzYzNDAyMn0.hAoXjLhK-PqlsdJUcZH083NqaUeg04WtA3jFkNfGi-M';
 Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
@@ -151,11 +169,11 @@ const statusColors = {
   online: Cesium.Color.fromCssColorString('#22c55e'),
   busy: Cesium.Color.fromCssColorString('#f97316'),
   away: Cesium.Color.fromCssColorString('#ef4444'),
-  localized: Cesium.Color.fromCssColorString('#3b82f6'),
   invisible: Cesium.Color.fromCssColorString('#6b7280')
 };
 const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
+const profilePopup = document.getElementById('profilePopup');
 function toggleRooms(){
   document.querySelector('.sidebar.rooms').classList.toggle('open');
   document.querySelector('.sidebar.users').classList.remove('open');
@@ -165,7 +183,6 @@ function toggleUsers(){
   document.querySelector('.sidebar.rooms').classList.remove('open');
 }
 // place Cesium toolbar above chat overlay so buttons stay visible
-document.body.appendChild(toolbar);
 toolbar.style.zIndex = 30;
 const chatBtn = document.createElement('button');
 chatBtn.className = 'cesium-button cesium-toolbar-button';
@@ -183,18 +200,34 @@ chatBtn.onclick = () => {
 toolbar.appendChild(chatBtn);
 const notifBtn = document.createElement('button');
 notifBtn.className = 'cesium-button cesium-toolbar-button';
-notifBtn.textContent = '🔔';
-notifBtn.title = 'Activer les notifications';
+function updateNotifBtn(){
+  if (notifState === 'all') { notifBtn.textContent = '🔔'; notifBtn.title = 'Toutes les notifications activées'; }
+  else if (notifState === 'friends') { notifBtn.textContent = '🔔👥'; notifBtn.title = 'Notifications uniquement des amis'; }
+  else { notifBtn.textContent = '🔕'; notifBtn.title = 'Notifications désactivées'; }
+}
+updateNotifBtn();
 notifBtn.onclick = () => {
-  if (typeof Notification === 'undefined') { alert('Notifications non supportées'); return; }
-  Notification.requestPermission().then(p => { notificationsAllowed = (p === 'granted'); });
+  notifState = notifState === 'all' ? 'friends' : notifState === 'friends' ? 'none' : 'all';
+  if (notifState !== 'none' && typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
+    Notification.requestPermission().then(p => { notificationsAllowed = (p === 'granted'); });
+  }
+  updateNotifBtn();
 };
 toolbar.appendChild(notifBtn);
 const locBtn = document.createElement('button');
 locBtn.className = 'cesium-button cesium-toolbar-button';
-locBtn.textContent = '📍';
-locBtn.title = 'Partager ma localisation';
-locBtn.onclick = () => shareLocation();
+function updateLocBtn(){
+  if (locationState === 'all') { locBtn.textContent = '📍'; locBtn.title = 'Localisation partagée à tous'; }
+  else if (locationState === 'friends') { locBtn.textContent = '📍👥'; locBtn.title = 'Localisation partagée aux amis'; }
+  else { locBtn.textContent = '🚫📍'; locBtn.title = 'Localisation désactivée'; }
+}
+updateLocBtn();
+locBtn.onclick = () => {
+  locationState = locationState === 'all' ? 'friends' : locationState === 'friends' ? 'none' : 'all';
+  if (locationState === 'none') stopLocation();
+  else shareLocation();
+  updateLocBtn();
+};
 toolbar.appendChild(locBtn);
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
@@ -223,10 +256,162 @@ handler.setInputAction(function(click){
   if (Cesium.defined(picked) && picked.id && picked.id.properties && picked.id.properties.client_id) {
     const id = picked.id.properties.client_id.getValue();
     const uname = picked.id.properties.name.getValue();
-    chatWrapper.classList.add('active');
-    openDM(id, uname);
+    showProfilePopup(id, uname, click.position);
+  } else {
+    hideProfilePopup();
   }
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+function showProfilePopup(id, uname, position){
+  profilePopup.innerHTML = '';
+  const title = document.createElement('div');
+  title.className = 'title';
+  title.textContent = uname;
+  profilePopup.appendChild(title);
+  const addBtn = (label, handler) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.onclick = () => { handler(); hideProfilePopup(); };
+    profilePopup.appendChild(b);
+  };
+  addBtn('Chat', () => { openDM(id, uname); });
+  addBtn('Suivre le pts GPS', () => { followGps(id); });
+  addBtn(mutedUsers.has(id) ? 'Activer les notifications' : 'Désactiver les notifications', () => { toggleUserNotif(id); });
+  addBtn('Wizz', () => { wizz(id); });
+  addBtn('Appel WebRTC', () => { startCall(id, false); });
+  addBtn('Visio WebRTC', () => { startCall(id, true); });
+  addBtn('Rejoindre un groupe', () => { joinGroup(id); });
+  profilePopup.style.left = position.x + 'px';
+  profilePopup.style.top = position.y + 'px';
+  profilePopup.classList.add('active');
+}
+
+function hideProfilePopup(){
+  profilePopup.classList.remove('active');
+}
+
+function followGps(id){
+  if (locationEntities[id]) {
+    viewer.trackedEntity = locationEntities[id];
+  }
+}
+
+function toggleUserNotif(id){
+  if (mutedUsers.has(id)) mutedUsers.delete(id);
+  else mutedUsers.add(id);
+}
+
+function wizz(id){
+  if (ws) ws.send(JSON.stringify({type:'wizz', to:id}));
+}
+
+function startCall(id, video){
+  if (!client_id) return;
+  const room = client_id < id ? `call_${client_id}_${id}` : `call_${id}_${client_id}`;
+  ws.send(JSON.stringify({type:'call_invite', to:id, room, video}));
+  joinCall(room, video);
+}
+
+function joinGroup(id){
+  const room = `group_${id}`;
+  joinCall(room, true);
+}
+
+function joinCall(room, video){
+  if (callRoom) hangup();
+  callRoom = room; callVideo = video;
+  document.getElementById('callOverlay').classList.add('active');
+  navigator.mediaDevices.getUserMedia({audio:true, video:video}).then(stream => {
+    localStream = stream;
+    document.getElementById('localVideo').srcObject = stream;
+    connectSignal(room);
+  }).catch(err => { console.error('media', err); hangup(); });
+}
+
+function connectSignal(room){
+  signal = new WebSocket(SIGNALING_URL);
+  signal.onopen = () => {
+    signal.send(JSON.stringify({cmd:'register', roomid:room}));
+    signalSend({type:'join', from:client_id});
+  };
+  signal.onmessage = e => {
+    const data = JSON.parse(e.data);
+    handleSignal(data.msg);
+  };
+}
+
+function signalSend(msg){
+  if (signal && signal.readyState === 1) {
+    signal.send(JSON.stringify({cmd:'send', roomid:callRoom, msg:msg}));
+  }
+}
+
+function handleSignal(msg){
+  switch(msg.type){
+    case 'join':
+      if (msg.from === client_id) return;
+      const pc = createPeer(msg.from);
+      pc.createOffer().then(o=>{pc.setLocalDescription(o); signalSend({type:'offer', from:client_id, to:msg.from, sdp:o});});
+      break;
+    case 'offer':
+      if (msg.to !== client_id) return;
+      const pc2 = createPeer(msg.from);
+      pc2.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      pc2.createAnswer().then(a=>{pc2.setLocalDescription(a); signalSend({type:'answer', from:client_id, to:msg.from, sdp:a});});
+      break;
+    case 'answer':
+      if (msg.to !== client_id) return;
+      peers[msg.from]?.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      break;
+    case 'candidate':
+      if (msg.to !== client_id) return;
+      peers[msg.from]?.addIceCandidate(new RTCIceCandidate(msg.candidate));
+      break;
+  }
+}
+
+function createPeer(id){
+  if (peers[id]) return peers[id];
+  const pc = new RTCPeerConnection();
+  peers[id] = pc;
+  if (localStream) localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
+  pc.onicecandidate = e => { if (e.candidate) signalSend({type:'candidate', from:client_id, to:id, candidate:e.candidate}); };
+  pc.ontrack = e => { addRemoteStream(id, e.streams[0]); };
+  return pc;
+}
+
+function addRemoteStream(id, stream){
+  let v = document.getElementById('remote_'+id);
+  if (!v) {
+    v = document.createElement('video');
+    v.id = 'remote_'+id;
+    v.autoplay = true; v.playsInline = true;
+    document.getElementById('remoteVideos').appendChild(v);
+  }
+  v.srcObject = stream;
+}
+
+function hangup(){
+  Object.values(peers).forEach(pc=>pc.close());
+  peers = {};
+  if (localStream) { localStream.getTracks().forEach(t=>t.stop()); localStream = null; }
+  if (signal) { signal.close(); signal = null; }
+  callRoom = null;
+  document.getElementById('remoteVideos').innerHTML = '';
+  document.getElementById('callOverlay').classList.remove('active');
+}
+
+function isFriend(id){
+  // TODO: déterminer si l'utilisateur est un ami
+  return false;
+}
+
+function shouldNotify(id){
+  if (mutedUsers.has(id)) return false;
+  if (notifState === 'none') return false;
+  if (notifState === 'friends') return isFriend(id);
+  return true;
+}
 
 // conversations: "room_<roomId>" ou "dm_<clientId>"
 let currentKey = 'room_general';
@@ -287,24 +472,13 @@ function shareLocation(){
     }
     ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
   }, err => {
-    console.error('Erreur de localisation :', err);
+    console.warn('Erreur de localisation :', err.message);
   }, {
     enableHighAccuracy: true,
-    maximumAge: 0,
-    timeout: 5000
+    maximumAge: 60000,
+    timeout: 15000
   });
 
-  status = 'localized';
-  const sel = document.getElementById('statusSelect');
-  sel.value = 'localized';
-  ws.send(JSON.stringify({type:'status', status:'localized'}));
-  if (client_id && clients[client_id]) {
-    clients[client_id].status = 'localized';
-    renderUsers();
-    if (locationEntities[client_id]) {
-      locationEntities[client_id].point.color = statusColors['localized'];
-    }
-  }
 }
 
 function stopLocation(){
@@ -312,6 +486,8 @@ function stopLocation(){
     navigator.geolocation.clearWatch(locationWatchId);
     locationWatchId = null;
   }
+  if (ws) ws.send(JSON.stringify({type:'location_remove'}));
+  removeLocation(client_id);
 }
 
 /* =========================
@@ -344,7 +520,7 @@ function connect(){
     loginRoom([...rooms.keys()][0]);
     if (navigator.permissions && navigator.permissions.query) {
       navigator.permissions.query({name:'geolocation'}).then(res => {
-        if (res.state === 'granted') shareLocation();
+        if (res.state === 'granted' && locationState !== 'none') shareLocation();
       });
     }
   };
@@ -362,13 +538,6 @@ function loginRoom(roomId){
 
 function changeStatus(){
   status = document.getElementById('statusSelect').value;
-  if (status === 'localized') {
-    shareLocation();
-  } else {
-    stopLocation();
-    removeLocation(client_id);
-  }
-  // update immédiat côté UI (optimiste)
   if (client_id && clients[client_id]) {
     clients[client_id].status = status;
     renderUsers();
@@ -376,7 +545,6 @@ function changeStatus(){
       locationEntities[client_id].point.color = statusColors[status] || Cesium.Color.CYAN;
     }
   }
-  // et propagation serveur
   ws.send(JSON.stringify({type:'status', status}));
 }
 
@@ -527,7 +695,7 @@ function onmessage(e){
         blinkTab(key);
         chatBtn.classList.add('blink');
       }
-      if (data.dm && notificationsAllowed && String(data.from_client_id) !== String(client_id)) {
+      if (data.dm && notificationsAllowed && String(data.from_client_id) !== String(client_id) && shouldNotify(data.from_client_id)) {
         new Notification('Message privé de ' + (data.from_client_name || 'Utilisateur'), {
           body: data.content || ''
         });
@@ -538,6 +706,17 @@ function onmessage(e){
     case 'logout': {
       delete clients[data.from_client_id];
       renderUsers();
+      break;
+    }
+    case 'wizz': {
+      alert('Wizz de ' + (clients[data.from]?.name || 'Utilisateur') + '!');
+      chatBtn.classList.add('blink');
+      break;
+    }
+    case 'call_invite': {
+      if (confirm('Rejoindre l\'appel ' + (data.video ? 'video' : 'audio') + ' de ' + (clients[data.from]?.name || 'Utilisateur') + ' ?')) {
+        joinCall(data.room, data.video);
+      }
       break;
     }
   }
@@ -706,7 +885,6 @@ function renderUsers(){
     switch(info.status){
       case 'busy': cls = 'busy'; break;
       case 'away': cls = 'away'; break;
-      case 'localized': cls = 'localized'; break;
       case 'invisible': cls = 'invisible'; break;
     }
     dot.className = 'dot ' + cls;
@@ -770,8 +948,10 @@ function openDM(id, username){
   if (!messages[key]) messages[key] = [];
   tabs[key] = 'DM avec ' + username;
   currentKey = key;
-  renderTabs(); renderMessages();
-  if (chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink');
+  chatWrapper.classList.add('active');
+  renderTabs();
+  renderMessages();
+  chatBtn.classList.remove('blink');
 }
 
 function onSubmit(){

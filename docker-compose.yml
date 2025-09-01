@@ -11,6 +11,7 @@ services:
       - "7272"
       - "1236"
       - "55151"
+      - "8877"
     volumes:
       - ./:/var/www/couckan/
     command: php start.php start   # foreground obligatoire
