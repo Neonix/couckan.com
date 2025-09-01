@@ -42,6 +42,7 @@ include __DIR__ . '/../../../config.php';
     .tab{background:var(--muted);border-radius:6px;padding:.28rem .55rem;display:flex;align-items:center;gap:.4rem;cursor:pointer}
     .tab.active{background:var(--accent);color:#fff}
     .tab.blink{animation:blink 1s infinite}
+    .cesium-toolbar-button.blink{animation:blink 1s infinite}
     .tab .actions{display:flex;align-items:center;gap:.25rem}
     .icon-btn{background:transparent;border:none;color:inherit;cursor:pointer;font-size:14px;opacity:.9}
     .icon-btn:hover{opacity:1}
@@ -136,7 +137,10 @@ function updateChatBtn(){
   chatBtn.textContent = `${uname} 💬 (${count})`;
 }
 updateChatBtn();
-chatBtn.onclick = () => chatWrapper.classList.toggle('active');
+chatBtn.onclick = () => {
+  chatWrapper.classList.toggle('active');
+  if (chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink');
+};
 toolbar.appendChild(chatBtn);
 const locBtn = document.createElement('button');
 locBtn.className = 'cesium-button cesium-toolbar-button';
@@ -408,7 +412,12 @@ function onmessage(e){
     case 'say': {
       // Stocke ET rafraîchit si la conversation visible est concernée
       const key = storeMessage(data);
-      if (currentKey === key) renderMessages(); else blinkTab(key);
+      if (currentKey === key && chatWrapper.classList.contains('active')) {
+        renderMessages();
+      } else {
+        blinkTab(key);
+        chatBtn.classList.add('blink');
+      }
       break;
     }
 
@@ -488,7 +497,7 @@ function renderTabs(){
       }
     }
 
-    div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); };
+    div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); if(chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink'); };
     div.id = 'tab_' + k;
     t.appendChild(div);
   });
@@ -626,6 +635,7 @@ function openDM(id, username){
   tabs[key] = 'DM avec ' + username;
   currentKey = key;
   renderTabs(); renderMessages();
+  if (chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink');
 }
 
 function onSubmit(){
