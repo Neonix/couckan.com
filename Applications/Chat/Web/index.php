@@ -154,6 +154,18 @@ locBtn.title = 'Partager ma localisation';
 locBtn.onclick = () => shareLocation();
 toolbar.appendChild(locBtn);
 
+if (window.matchMedia('(max-width:768px)').matches) {
+  const usersBtn = document.createElement('button');
+  usersBtn.className = 'cesium-button cesium-toolbar-button';
+  usersBtn.textContent = '📋';
+  usersBtn.title = 'Utilisateurs connectés';
+  usersBtn.onclick = () => {
+    chatWrapper.classList.add('active');
+    document.querySelector('.sidebar.users').scrollIntoView({behavior:'smooth'});
+  };
+  toolbar.appendChild(usersBtn);
+}
+
 const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 handler.setInputAction(function(click){
   const picked = viewer.scene.pick(click.position);
