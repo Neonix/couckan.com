@@ -64,6 +64,10 @@ include __DIR__ . '/../../../config.php';
     .profile-popup .title{font-weight:700;margin-bottom:.25rem}
     .profile-popup button{background:var(--muted);color:var(--text);border:none;border-radius:6px;padding:.3rem .5rem;cursor:pointer}
     .profile-popup button:hover{background:var(--muted-2)}
+    #callOverlay{position:fixed;top:0;left:0;right:0;bottom:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.8);z-index:50}
+    #callOverlay.active{display:flex}
+    #callOverlay video{max-width:90%;max-height:80%;background:#000;border-radius:8px;margin:.5rem}
+    #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
     @media (max-width:768px){
       #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none}
       .chat{order:1;width:100%;margin-bottom:60px}
@@ -125,6 +129,11 @@ include __DIR__ . '/../../../config.php';
   </div>
   </div>
   <div id="profilePopup" class="profile-popup"></div>
+  <div id="callOverlay">
+    <video id="localVideo" autoplay muted playsinline></video>
+    <div id="remoteVideos"></div>
+    <button class="btn" onclick="hangup()">Raccrocher</button>
+  </div>
 
 <script>
 /* =========================
@@ -145,6 +154,8 @@ let ws, name, client_id = null, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false;
 let notifState = 'all', locationState = 'all';
 const mutedUsers = new Set();
+const SIGNALING_URL = '<?php echo $SIGNALING_ADDRESS; ?>';
+let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 
 const CESIUM_ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjNmM4NjEwYy01MjZkLTQ2YmYtYmI2ZC1kNzg4MjdhNjUxODIiLCJpZCI6NjI5OTEsImlhdCI6MTYyNzYzNDAyMn0.hAoXjLhK-PqlsdJUcZH083NqaUeg04WtA3jFkNfGi-M';
 Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
@@ -297,13 +308,99 @@ function wizz(id){
 }
 
 function startCall(id, video){
-  console.log('startCall', id, video);
-  // TODO: implémenter WebRTC
+  if (!client_id) return;
+  const room = client_id < id ? `call_${client_id}_${id}` : `call_${id}_${client_id}`;
+  ws.send(JSON.stringify({type:'call_invite', to:id, room, video}));
+  joinCall(room, video);
 }
 
 function joinGroup(id){
-  console.log('joinGroup', id);
-  // TODO: rejoindre appel ou chat groupe
+  const room = `group_${id}`;
+  joinCall(room, true);
+}
+
+function joinCall(room, video){
+  if (callRoom) hangup();
+  callRoom = room; callVideo = video;
+  document.getElementById('callOverlay').classList.add('active');
+  navigator.mediaDevices.getUserMedia({audio:true, video:video}).then(stream => {
+    localStream = stream;
+    document.getElementById('localVideo').srcObject = stream;
+    connectSignal(room);
+  }).catch(err => { console.error('media', err); hangup(); });
+}
+
+function connectSignal(room){
+  signal = new WebSocket(SIGNALING_URL);
+  signal.onopen = () => {
+    signal.send(JSON.stringify({cmd:'register', roomid:room}));
+    signalSend({type:'join', from:client_id});
+  };
+  signal.onmessage = e => {
+    const data = JSON.parse(e.data);
+    handleSignal(data.msg);
+  };
+}
+
+function signalSend(msg){
+  if (signal && signal.readyState === 1) {
+    signal.send(JSON.stringify({cmd:'send', roomid:callRoom, msg:msg}));
+  }
+}
+
+function handleSignal(msg){
+  switch(msg.type){
+    case 'join':
+      if (msg.from === client_id) return;
+      const pc = createPeer(msg.from);
+      pc.createOffer().then(o=>{pc.setLocalDescription(o); signalSend({type:'offer', from:client_id, to:msg.from, sdp:o});});
+      break;
+    case 'offer':
+      if (msg.to !== client_id) return;
+      const pc2 = createPeer(msg.from);
+      pc2.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      pc2.createAnswer().then(a=>{pc2.setLocalDescription(a); signalSend({type:'answer', from:client_id, to:msg.from, sdp:a});});
+      break;
+    case 'answer':
+      if (msg.to !== client_id) return;
+      peers[msg.from]?.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      break;
+    case 'candidate':
+      if (msg.to !== client_id) return;
+      peers[msg.from]?.addIceCandidate(new RTCIceCandidate(msg.candidate));
+      break;
+  }
+}
+
+function createPeer(id){
+  if (peers[id]) return peers[id];
+  const pc = new RTCPeerConnection();
+  peers[id] = pc;
+  if (localStream) localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
+  pc.onicecandidate = e => { if (e.candidate) signalSend({type:'candidate', from:client_id, to:id, candidate:e.candidate}); };
+  pc.ontrack = e => { addRemoteStream(id, e.streams[0]); };
+  return pc;
+}
+
+function addRemoteStream(id, stream){
+  let v = document.getElementById('remote_'+id);
+  if (!v) {
+    v = document.createElement('video');
+    v.id = 'remote_'+id;
+    v.autoplay = true; v.playsInline = true;
+    document.getElementById('remoteVideos').appendChild(v);
+  }
+  v.srcObject = stream;
+}
+
+function hangup(){
+  Object.values(peers).forEach(pc=>pc.close());
+  peers = {};
+  if (localStream) { localStream.getTracks().forEach(t=>t.stop()); localStream = null; }
+  if (signal) { signal.close(); signal = null; }
+  callRoom = null;
+  document.getElementById('remoteVideos').innerHTML = '';
+  document.getElementById('callOverlay').classList.remove('active');
 }
 
 function isFriend(id){
@@ -628,6 +725,17 @@ function onmessage(e){
     case 'logout': {
       delete clients[data.from_client_id];
       renderUsers();
+      break;
+    }
+    case 'wizz': {
+      alert('Wizz de ' + (clients[data.from]?.name || 'Utilisateur') + '!');
+      chatBtn.classList.add('blink');
+      break;
+    }
+    case 'call_invite': {
+      if (confirm('Rejoindre l\'appel ' + (data.video ? 'video' : 'audio') + ' de ' + (clients[data.from]?.name || 'Utilisateur') + ' ?')) {
+        joinCall(data.room, data.video);
+      }
       break;
     }
   }

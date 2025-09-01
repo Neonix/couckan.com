@@ -250,6 +250,38 @@ class Events
             }
 
             /**
+             * "Wizz" : notifie un utilisateur ciblé.
+             */
+            case 'wizz': {
+                $to = $data['to'] ?? null;
+                if (!$to) return;
+                $msg = [
+                    'type'      => 'wizz',
+                    'from'      => $client_id,
+                ];
+                Gateway::sendToClient($to, json_encode($msg));
+                return;
+            }
+
+            /**
+             * Invitation à rejoindre une room WebRTC.
+             */
+            case 'call_invite': {
+                $to    = $data['to']    ?? null;
+                $room  = $data['room']  ?? null;
+                $video = !empty($data['video']);
+                if(!$to || !$room) return;
+                $msg = [
+                    'type'  => 'call_invite',
+                    'from'  => $client_id,
+                    'room'  => $room,
+                    'video' => $video,
+                ];
+                Gateway::sendToClient($to, json_encode($msg));
+                return;
+            }
+
+            /**
              * Message :
              *  - DM : envoie à l'autre ET au sender (une seule fois chacun)
              *  - Room : broadcast à la room courante
