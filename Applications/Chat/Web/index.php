@@ -59,6 +59,11 @@ include __DIR__ . '/../../../config.php';
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
     .mobile-nav{display:none}
+    .profile-popup{position:absolute;display:none;flex-direction:column;gap:.25rem;padding:.5rem;background:var(--panel);border:1px solid var(--muted-2);border-radius:8px;z-index:40;min-width:160px}
+    .profile-popup.active{display:flex}
+    .profile-popup .title{font-weight:700;margin-bottom:.25rem}
+    .profile-popup button{background:var(--muted);color:var(--text);border:none;border-radius:6px;padding:.3rem .5rem;cursor:pointer}
+    .profile-popup button:hover{background:var(--muted-2)}
     @media (max-width:768px){
       #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none}
       .chat{order:1;width:100%;margin-bottom:60px}
@@ -119,6 +124,7 @@ include __DIR__ . '/../../../config.php';
     <button onclick="toggleUsers()">Utilisateurs</button>
   </div>
   </div>
+  <div id="profilePopup" class="profile-popup"></div>
 
 <script>
 /* =========================
@@ -137,6 +143,8 @@ navigator.geolocation = navigator.geolocation ||
 
 let ws, name, client_id = null, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false;
+let notifState = 'all', locationState = 'all';
+const mutedUsers = new Set();
 
 const CESIUM_ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjNmM4NjEwYy01MjZkLTQ2YmYtYmI2ZC1kNzg4MjdhNjUxODIiLCJpZCI6NjI5OTEsImlhdCI6MTYyNzYzNDAyMn0.hAoXjLhK-PqlsdJUcZH083NqaUeg04WtA3jFkNfGi-M';
 Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
@@ -156,6 +164,7 @@ const statusColors = {
 };
 const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
+const profilePopup = document.getElementById('profilePopup');
 function toggleRooms(){
   document.querySelector('.sidebar.rooms').classList.toggle('open');
   document.querySelector('.sidebar.users').classList.remove('open');
@@ -182,18 +191,34 @@ chatBtn.onclick = () => {
 toolbar.appendChild(chatBtn);
 const notifBtn = document.createElement('button');
 notifBtn.className = 'cesium-button cesium-toolbar-button';
-notifBtn.textContent = '🔔';
-notifBtn.title = 'Activer les notifications';
+function updateNotifBtn(){
+  if (notifState === 'all') { notifBtn.textContent = '🔔'; notifBtn.title = 'Toutes les notifications activées'; }
+  else if (notifState === 'friends') { notifBtn.textContent = '🔔👥'; notifBtn.title = 'Notifications uniquement des amis'; }
+  else { notifBtn.textContent = '🔕'; notifBtn.title = 'Notifications désactivées'; }
+}
+updateNotifBtn();
 notifBtn.onclick = () => {
-  if (typeof Notification === 'undefined') { alert('Notifications non supportées'); return; }
-  Notification.requestPermission().then(p => { notificationsAllowed = (p === 'granted'); });
+  notifState = notifState === 'all' ? 'friends' : notifState === 'friends' ? 'none' : 'all';
+  if (notifState !== 'none' && typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
+    Notification.requestPermission().then(p => { notificationsAllowed = (p === 'granted'); });
+  }
+  updateNotifBtn();
 };
 toolbar.appendChild(notifBtn);
 const locBtn = document.createElement('button');
 locBtn.className = 'cesium-button cesium-toolbar-button';
-locBtn.textContent = '📍';
-locBtn.title = 'Partager ma localisation';
-locBtn.onclick = () => shareLocation();
+function updateLocBtn(){
+  if (locationState === 'all') { locBtn.textContent = '📍'; locBtn.title = 'Localisation partagée à tous'; }
+  else if (locationState === 'friends') { locBtn.textContent = '📍👥'; locBtn.title = 'Localisation partagée aux amis'; }
+  else { locBtn.textContent = '🚫📍'; locBtn.title = 'Localisation désactivée'; }
+}
+updateLocBtn();
+locBtn.onclick = () => {
+  locationState = locationState === 'all' ? 'friends' : locationState === 'friends' ? 'none' : 'all';
+  if (locationState === 'none') stopLocation();
+  else shareLocation();
+  updateLocBtn();
+};
 toolbar.appendChild(locBtn);
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
@@ -222,10 +247,76 @@ handler.setInputAction(function(click){
   if (Cesium.defined(picked) && picked.id && picked.id.properties && picked.id.properties.client_id) {
     const id = picked.id.properties.client_id.getValue();
     const uname = picked.id.properties.name.getValue();
-    chatWrapper.classList.add('active');
-    openDM(id, uname);
+    showProfilePopup(id, uname, click.position);
+  } else {
+    hideProfilePopup();
   }
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+function showProfilePopup(id, uname, position){
+  profilePopup.innerHTML = '';
+  const title = document.createElement('div');
+  title.className = 'title';
+  title.textContent = uname;
+  profilePopup.appendChild(title);
+  const addBtn = (label, handler) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.onclick = () => { handler(); hideProfilePopup(); };
+    profilePopup.appendChild(b);
+  };
+  addBtn('Chat', () => { openDM(id, uname); });
+  addBtn('Suivre le pts GPS', () => { followGps(id); });
+  addBtn(mutedUsers.has(id) ? 'Activer les notifications' : 'Désactiver les notifications', () => { toggleUserNotif(id); });
+  addBtn('Wizz', () => { wizz(id); });
+  addBtn('Appel WebRTC', () => { startCall(id, false); });
+  addBtn('Visio WebRTC', () => { startCall(id, true); });
+  addBtn('Rejoindre un groupe', () => { joinGroup(id); });
+  profilePopup.style.left = position.x + 'px';
+  profilePopup.style.top = position.y + 'px';
+  profilePopup.classList.add('active');
+}
+
+function hideProfilePopup(){
+  profilePopup.classList.remove('active');
+}
+
+function followGps(id){
+  if (locationEntities[id]) {
+    viewer.trackedEntity = locationEntities[id];
+  }
+}
+
+function toggleUserNotif(id){
+  if (mutedUsers.has(id)) mutedUsers.delete(id);
+  else mutedUsers.add(id);
+}
+
+function wizz(id){
+  if (ws) ws.send(JSON.stringify({type:'wizz', to:id}));
+}
+
+function startCall(id, video){
+  console.log('startCall', id, video);
+  // TODO: implémenter WebRTC
+}
+
+function joinGroup(id){
+  console.log('joinGroup', id);
+  // TODO: rejoindre appel ou chat groupe
+}
+
+function isFriend(id){
+  // TODO: déterminer si l'utilisateur est un ami
+  return false;
+}
+
+function shouldNotify(id){
+  if (mutedUsers.has(id)) return false;
+  if (notifState === 'none') return false;
+  if (notifState === 'friends') return isFriend(id);
+  return true;
+}
 
 // conversations: "room_<roomId>" ou "dm_<clientId>"
 let currentKey = 'room_general';
@@ -343,7 +434,7 @@ function connect(){
     loginRoom([...rooms.keys()][0]);
     if (navigator.permissions && navigator.permissions.query) {
       navigator.permissions.query({name:'geolocation'}).then(res => {
-        if (res.state === 'granted') shareLocation();
+        if (res.state === 'granted' && locationState !== 'none') shareLocation();
       });
     }
   };
@@ -526,7 +617,7 @@ function onmessage(e){
         blinkTab(key);
         chatBtn.classList.add('blink');
       }
-      if (data.dm && notificationsAllowed && String(data.from_client_id) !== String(client_id)) {
+      if (data.dm && notificationsAllowed && String(data.from_client_id) !== String(client_id) && shouldNotify(data.from_client_id)) {
         new Notification('Message privé de ' + (data.from_client_name || 'Utilisateur'), {
           body: data.content || ''
         });
