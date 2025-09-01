@@ -7,6 +7,8 @@ include __DIR__ . '/../../../config.php';
   <meta charset="UTF-8" />
   <title>⚡ Chat Futuriste ⚡</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
   <style>
     :root{
       --bg:#0f172a; --panel:#1e293b; --muted:#334155; --muted-2:#475569;
@@ -14,7 +16,11 @@ include __DIR__ . '/../../../config.php';
       --ok:#22c55e; --busy:#f97316; --away:#ef4444; --warn:#facc15;
     }
     *{box-sizing:border-box}
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;height:100dvh;overflow:hidden}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+    #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
+    #chatToggle{position:fixed;top:10px;right:10px;background:var(--panel);color:var(--text);padding:.4rem .6rem;border-radius:6px;cursor:pointer;z-index:1000}
+    #chatWrapper{position:absolute;top:0;left:0;right:0;bottom:0;display:none;min-height:100vh;height:100dvh;overflow:hidden}
+    #chatWrapper.active{display:flex}
     .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
     .sidebar details{display:flex;flex-direction:column;gap:.75rem;padding:1rem}
     .sidebar summary{list-style:none;cursor:pointer}
@@ -51,7 +57,7 @@ include __DIR__ . '/../../../config.php';
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
     @media (max-width:768px){
-      body{flex-direction:column;height:auto;overflow:auto}
+      #chatWrapper{flex-direction:column;height:auto;overflow:auto}
       .chat{order:1;width:100%}
       .sidebar{flex:0 0 100%;width:100%;height:auto}
       .sidebar.rooms{order:2}
@@ -60,6 +66,9 @@ include __DIR__ . '/../../../config.php';
   </style>
 </head>
 <body>
+  <div id="cesiumContainer"></div>
+  <div id="chatToggle"><span id="chatUser">Invité</span> 💬</div>
+  <div id="chatWrapper">
   <!-- Salles -->
   <aside class="sidebar rooms">
     <details open>
@@ -98,6 +107,7 @@ include __DIR__ . '/../../../config.php';
       </select>
     </details>
   </aside>
+  </div>
 
 <script>
 if (window.matchMedia('(max-width:768px)').matches) {
@@ -107,6 +117,26 @@ if (window.matchMedia('(max-width:768px)').matches) {
    ÉTAT APP
 ========================= */
 let ws, name, client_id = null, status = 'online';
+
+const CESIUM_ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjNmM4NjEwYy01MjZkLTQ2YmYtYmI2ZC1kNzg4MjdhNjUxODIiLCJpZCI6NjI5OTEsImlhdCI6MTYyNzYzNDAyMn0.hAoXjLhK-PqlsdJUcZH083NqaUeg04WtA3jFkNfGi-M';
+Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
+const viewer = new Cesium.Viewer('cesiumContainer');
+const locationEntities = {};
+const chatWrapper = document.getElementById('chatWrapper');
+const chatToggle  = document.getElementById('chatToggle');
+chatToggle.onclick = () => chatWrapper.classList.toggle('active');
+document.getElementById('chatUser').textContent = localStorage.getItem('chatName') || 'Invité';
+
+const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+handler.setInputAction(function(click){
+  const picked = viewer.scene.pick(click.position);
+  if (Cesium.defined(picked) && picked.id && picked.id.properties && picked.id.properties.client_id) {
+    const id = picked.id.properties.client_id.getValue();
+    const uname = picked.id.properties.name.getValue();
+    chatWrapper.classList.add('active');
+    openDM(id, uname);
+  }
+}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
 // conversations: "room_<roomId>" ou "dm_<clientId>"
 let currentKey = 'room_general';
@@ -123,6 +153,31 @@ let rooms = new Map([['general', {visibility:'public', creator_id:null}]]);
 // rejoindre via lien ?room=xxx
 const q = new URLSearchParams(location.search);
 if (q.get('room')) rooms.set(q.get('room'), {visibility:'private', creator_id:null});
+
+function addOrUpdateLocation(loc){
+  const id = loc.client_id;
+  let ent = locationEntities[id];
+  if (!ent){
+    ent = viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat),
+      point: {pixelSize:10, color: Cesium.Color.CYAN},
+      label: {text: loc.client_name, font:'14px sans-serif', verticalOrigin: Cesium.VerticalOrigin.BOTTOM},
+      properties: {client_id: id, name: loc.client_name}
+    });
+    locationEntities[id] = ent;
+  } else {
+    ent.position = Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat);
+    ent.label.text = loc.client_name;
+    ent.properties.name = loc.client_name;
+  }
+}
+
+function removeLocation(id){
+  if (locationEntities[id]) {
+    viewer.entities.remove(locationEntities[id]);
+    delete locationEntities[id];
+  }
+}
 
 /* =========================
    SOCKET
@@ -152,6 +207,13 @@ function connect(){
     if (!name) name = localStorage.getItem('chatName') || 'Invité';
     // login première room : soit "general", soit celle de l'URL si présente
     loginRoom([...rooms.keys()][0]);
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(pos => {
+        const {latitude, longitude} = pos.coords;
+        viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1000000)});
+        ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
+      });
+    }
   };
 
   ws.onmessage = onmessage;
@@ -181,6 +243,7 @@ function chooseName(){
     const newName = prompt('Votre pseudo ?') || 'Invité';
     name = newName;
     localStorage.setItem('chatName', name);
+    document.getElementById('chatUser').textContent = name;
     ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
   }
 }
@@ -243,8 +306,28 @@ function onmessage(e){
       if (client_id && data.client_id == client_id) {
         name = data.client_name;
         localStorage.setItem('chatName', name);
+        document.getElementById('chatUser').textContent = name;
+        if (locationEntities[client_id]) {
+          locationEntities[client_id].label.text = name;
+          locationEntities[client_id].properties.name = name;
+        }
       }
       renderUsers();
+      break;
+    }
+
+    case 'locations': {
+      (data.locations || []).forEach(l => addOrUpdateLocation(l));
+      break;
+    }
+
+    case 'location': {
+      addOrUpdateLocation(data);
+      break;
+    }
+
+    case 'location_remove': {
+      removeLocation(data.client_id);
       break;
     }
 

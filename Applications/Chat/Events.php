@@ -8,6 +8,8 @@ require_once __DIR__ . '/ChatDb.php';
  */
 class Events
 {
+    public static $locations = [];
+
     public static function onMessage($client_id, $message)
     {
         $data = json_decode($message, true);
@@ -74,6 +76,11 @@ class Events
                     'messages' => $history
                 ]));
 
+                Gateway::sendToClient($client_id, json_encode([
+                    'type' => 'locations',
+                    'locations' => array_values(self::$locations)
+                ]));
+
                 ChatDb::logRequest('ws_login', $ua, '');
                 return;
             }
@@ -105,6 +112,29 @@ class Events
                     'client_name'=> $new,
                 ];
                 Gateway::sendToGroup($room_id, json_encode($msg));
+                if (isset(self::$locations[$client_id])) {
+                    self::$locations[$client_id]['client_name'] = $new;
+                    $loc = self::$locations[$client_id];
+                    $loc['type'] = 'location';
+                    Gateway::sendToAll(json_encode($loc));
+                }
+                return;
+            }
+
+            case 'location': {
+                $lat = $data['lat'] ?? null;
+                $lon = $data['lon'] ?? null;
+                if ($lat === null || $lon === null) return;
+                $client_name = $_SESSION['client_name'] ?? 'Invité';
+                self::$locations[$client_id] = [
+                    'client_id'   => $client_id,
+                    'client_name' => $client_name,
+                    'lat'         => (float)$lat,
+                    'lon'         => (float)$lon,
+                ];
+                $msg = self::$locations[$client_id];
+                $msg['type'] = 'location';
+                Gateway::sendToAll(json_encode($msg));
                 return;
             }
 
@@ -212,6 +242,10 @@ class Events
                 'time'             => date('Y-m-d H:i:s'),
             ];
             Gateway::sendToGroup($room_id, json_encode($msg));
+        }
+        if (isset(self::$locations[$client_id])) {
+            unset(self::$locations[$client_id]);
+            Gateway::sendToAll(json_encode(['type'=>'location_remove','client_id'=>$client_id]));
         }
     }
 }
