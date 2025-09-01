@@ -169,6 +169,15 @@ chatBtn.onclick = () => {
   document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
 };
 toolbar.appendChild(chatBtn);
+const notifBtn = document.createElement('button');
+notifBtn.className = 'cesium-button cesium-toolbar-button';
+notifBtn.textContent = '🔔';
+notifBtn.title = 'Activer les notifications';
+notifBtn.onclick = () => {
+  if (typeof Notification === 'undefined') { alert('Notifications non supportées'); return; }
+  Notification.requestPermission().then(p => { notificationsAllowed = (p === 'granted'); });
+};
+toolbar.appendChild(notifBtn);
 const locBtn = document.createElement('button');
 locBtn.className = 'cesium-button cesium-toolbar-button';
 locBtn.textContent = '📍';
@@ -211,6 +220,7 @@ handler.setInputAction(function(click){
 let currentKey = 'room_general';
 let messages   = { room_general: [] };
 let tabs       = { room_general: 'Salle générale' };
+let notificationsAllowed = (typeof Notification !== 'undefined' && Notification.permission === 'granted');
 
 // liste d’utilisateurs de la room active : { id: {name, status} }
 
@@ -477,6 +487,11 @@ function onmessage(e){
         blinkTab(key);
         chatBtn.classList.add('blink');
       }
+      if (data.dm && notificationsAllowed && String(data.from_client_id) !== String(client_id)) {
+        new Notification('Message privé de ' + (data.from_client_name || 'Utilisateur'), {
+          body: data.content || ''
+        });
+      }
       break;
     }
 
@@ -554,6 +569,17 @@ function renderTabs(){
         }
         if (actions.childNodes.length) div.appendChild(actions);
       }
+    } else if (k.startsWith('dm_')) {
+      const partnerId = k.substring(3);
+      const actions = document.createElement('span');
+      actions.className = 'actions';
+      const close = document.createElement('button');
+      close.className = 'icon-btn';
+      close.title     = 'Fermer cette conversation';
+      close.textContent = '×';
+      close.onclick = (e) => { e.stopPropagation(); closeDM(partnerId); };
+      actions.appendChild(close);
+      div.appendChild(actions);
     }
 
     div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); if(chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink'); };
@@ -596,6 +622,17 @@ function closeRoom(roomId){
   const meta = rooms.get(roomId);
   if (!meta || !client_id || meta.creator_id != client_id) return;
   ws.send(JSON.stringify({type:'close_room', room_id:roomId, creator_id:client_id}));
+}
+
+function closeDM(id){
+  const key = 'dm_' + id;
+  delete tabs[key];
+  delete messages[key];
+  if (currentKey === key) {
+    currentKey = 'room_general';
+    renderMessages();
+  }
+  renderTabs();
 }
 
 function copyRoomLink(roomId, notify = false){
