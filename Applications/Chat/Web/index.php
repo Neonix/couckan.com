@@ -671,21 +671,31 @@ function shareLocation(){
     locationWatchId = null;
   }
   hasFlownToLocation = false;
-  locationWatchId = navigator.geolocation.watchPosition(pos => {
+
+  const options = {
+    enableHighAccuracy: true,
+    maximumAge: 60000,
+    timeout: 15000
+  };
+
+  const sendPosition = pos => {
     const {latitude, longitude} = pos.coords;
     if (!hasFlownToLocation) {
       viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1000000)});
       hasFlownToLocation = true;
     }
     ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
-  }, err => {
-    console.warn('Erreur de localisation :', err.message);
-  }, {
-    enableHighAccuracy: true,
-    maximumAge: 60000,
-    timeout: 15000
-  });
+  };
 
+  const errorHandler = err => {
+    console.warn('Erreur de localisation :', err.message);
+  };
+
+  // iOS Safari requires getCurrentPosition to be called directly from a user gesture
+  navigator.geolocation.getCurrentPosition(pos => {
+    sendPosition(pos);
+    locationWatchId = navigator.geolocation.watchPosition(sendPosition, errorHandler, options);
+  }, errorHandler, options);
 }
 
 function stopLocation(){
