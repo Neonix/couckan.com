@@ -22,6 +22,7 @@ include __DIR__ . '/../../../config.php';
     #chatWrapper.active{display:flex}
     .cesium-viewer-toolbar{z-index:30}
     .cesium-toolbar-button{margin:2px}
+    .cesium-home-button.auto-fly-disabled{filter:grayscale(1);opacity:.5}
     .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
     .sidebar details{display:flex;flex-direction:column;gap:.75rem;padding:1rem}
     .sidebar summary{list-style:none;cursor:pointer}
@@ -178,6 +179,8 @@ const storedId = localStorage.getItem('chatUid');
 let ws, name, client_id = storedId, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false;
 let notifState = 'all', locationState = 'none';
+let autoFlyNewUsers = true;
+const autoFlyVisited = new Set();
 const mutedUsers = new Set();
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
@@ -303,7 +306,17 @@ locBtn.onclick = () => {
 toolbar.appendChild(locBtn);
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
+  function updateHomeBtnState(){
+    homeBtn.title = autoFlyNewUsers ? 'Auto vol vers nouveaux utilisateurs activé' : 'Auto vol vers nouveaux utilisateurs désactivé';
+    homeBtn.classList.toggle('auto-fly-disabled', !autoFlyNewUsers);
+  }
+  updateHomeBtnState();
   homeBtn.addEventListener('click', () => {
+    autoFlyNewUsers = !autoFlyNewUsers;
+    if (autoFlyNewUsers) {
+      Object.keys(clients).forEach(id => autoFlyVisited.add(String(id)));
+    }
+    updateHomeBtnState();
     chatWrapper.classList.remove('active');
     document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
   });
@@ -669,6 +682,18 @@ function removeLocation(id){
   }
 }
 
+function maybeFlyToNewUser(loc){
+  const id = String(loc.client_id);
+  if (id === String(client_id)) {
+    autoFlyVisited.add(id);
+    return;
+  }
+  if (!autoFlyVisited.has(id) && autoFlyNewUsers) {
+    viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 1000000)});
+  }
+  autoFlyVisited.add(id);
+}
+
 function shareLocation(){
   if (!navigator.geolocation) return;
   if (locationWatchId !== null) {
@@ -792,6 +817,7 @@ function onmessage(e){
       localStorage.setItem('chatUid', client_id);
       clients = data.client_list || {};
       renderUsers();
+      Object.keys(clients).forEach(id => autoFlyVisited.add(String(id)));
 
       // S’assure que l’onglet de la room existe et devient actif
       ensureRoomTab(data.room_id);
@@ -848,12 +874,16 @@ function onmessage(e){
     }
 
     case 'locations': {
-      (data.locations || []).forEach(l => addOrUpdateLocation(l));
+      (data.locations || []).forEach(l => {
+        autoFlyVisited.add(String(l.client_id));
+        addOrUpdateLocation(l);
+      });
       break;
     }
 
     case 'location': {
       addOrUpdateLocation(data);
+      maybeFlyToNewUser(data);
       break;
     }
 
@@ -924,6 +954,7 @@ function onmessage(e){
     case 'logout': {
       delete clients[data.from_client_id];
       renderUsers();
+      autoFlyVisited.delete(String(data.from_client_id));
       break;
     }
     case 'wizz': {
