@@ -1,4 +1,13 @@
 <?php
+# Config Prod Docker:
+#    'docker'   => true,
+#    'ssl'      => false,
+#    'localdev' => false,
+
+# Config Dev - sudo php start.php start:
+#    'docker'   => false,
+#    'ssl'      => true,
+#    'localdev' => true,
 
 $_config = [
     'docker'   => false,
