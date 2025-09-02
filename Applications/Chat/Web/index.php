@@ -311,7 +311,10 @@ if (homeBtn) {
     homeBtn.classList.toggle('auto-fly-disabled', !autoFlyNewUsers);
   }
   updateHomeBtnState();
-  viewer.homeButton.viewModel.command.beforeExecute.add(e => {
+  // Intercept the Cesium home button command to toggle auto‑fly without
+  // triggering its default camera reset. Cesium's Command uses an Event
+  // interface where listeners are registered via `addEventListener`.
+  viewer.homeButton.viewModel.command.beforeExecute.addEventListener(e => {
     e.cancel = true;
     autoFlyNewUsers = !autoFlyNewUsers;
     if (autoFlyNewUsers) {
