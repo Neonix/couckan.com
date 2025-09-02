@@ -17,7 +17,7 @@ $_config = [
 
 $scheme = $_config['ssl'] ? 'wss://' : 'ws://';
 $host   = $_config['localdev'] ? 'localhost' : 'couckan.com';
-$SIGNALING_ADDRESS = $scheme . $host . '/signal';
+$SIGNALING_ADDRESS = 'wss://' . $host . '/signal';
 
 $SSL_CONTEXT = [
     'ssl' => [
