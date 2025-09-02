@@ -70,6 +70,7 @@ include __DIR__ . '/../../../config.php';
     #callOverlay.with-remote #localVideo{position:absolute;bottom:1rem;right:1rem;width:25%;max-width:200px;border:2px solid #fff;z-index:60}
     #callOverlay.with-remote #remoteVideos{flex:1;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
     #callOverlay.with-remote #remoteVideos video{max-width:100%;max-height:100%}
+    #callOverlay .error{color:#f87171;margin-top:.5rem;text-align:center}
     #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
     #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
     @media (max-width:768px){
@@ -135,6 +136,7 @@ include __DIR__ . '/../../../config.php';
   <div id="callOverlay">
     <video id="localVideo" autoplay muted playsinline></video>
     <div id="remoteVideos"></div>
+    <div id="callError" class="error"></div>
     <div id="callControls">
       <button class="btn secondary" id="micBtn" onclick="toggleMic()">Couper micro</button>
       <button class="btn secondary" id="videoBtn" onclick="toggleVideo()">Désactiver vidéo</button>
@@ -181,16 +183,37 @@ let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
 let micEnabled = true, videoEnabled = true;
 
+function showCallError(msg){
+  document.getElementById('callError').textContent = msg || '';
+}
+
+function mediaErrorMessage(err){
+  switch(err.name){
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return "Accès à la caméra ou au micro refusé.";
+    case 'NotFoundError':
+      return "Aucun périphérique audio/vidéo détecté.";
+    case 'NotReadableError':
+      return "Impossible d'accéder aux périphériques. Ils sont peut-être utilisés par une autre application.";
+    case 'OverconstrainedError':
+      return "Aucun périphérique ne correspond aux contraintes demandées.";
+    default:
+      return "Erreur lors de l'accès à la caméra/micro (" + err.message + ").";
+  }
+}
+
   <?php
   if ($_config['docker']) {
     echo "const SIGNALING_URL = 'wss://' + document.domain + '/signal';";
   } else {
       // WebServer
-      if ($_config['ssl']) 
+      if ($_config['ssl'])
         echo "const SIGNALING_URL = 'wss://' + document.domain + ':8877';";
       else
         echo "const SIGNALING_URL = 'ws://' + document.domain + ':8877';";
   }
+  echo "\nconst ICE_SERVERS = " . json_encode($_config['ice_servers']) . ";";
   ?>
   
 const CESIUM_ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjNmM4NjEwYy01MjZkLTQ2YmYtYmI2ZC1kNzg4MjdhNjUxODIiLCJpZCI6NjI5OTEsImlhdCI6MTYyNzYzNDAyMn0.hAoXjLhK-PqlsdJUcZH083NqaUeg04WtA3jFkNfGi-M';
@@ -369,11 +392,16 @@ function joinCall(room, video){
   document.getElementById('micBtn').textContent = 'Couper micro';
   document.getElementById('videoBtn').textContent = video ? 'Désactiver vidéo' : 'Activer vidéo';
   document.getElementById('callOverlay').classList.add('active');
+  showCallError('');
   getUserMedia({audio:true, video:video}).then(stream => {
     localStream = stream;
     document.getElementById('localVideo').srcObject = stream;
     connectSignal(room);
-  }).catch(err => { console.error('media', err); hangup(); });
+  }).catch(err => {
+    console.error('media', err);
+    showCallError(mediaErrorMessage(err));
+    hangup();
+  });
 }
 
 function connectSignal(room){
@@ -385,6 +413,13 @@ function connectSignal(room){
   signal.onmessage = e => {
     const data = JSON.parse(e.data);
     handleSignal(data.msg);
+  };
+  signal.onerror = () => showCallError('Erreur de connexion au serveur de signalisation.');
+  signal.onclose = () => {
+    if (callRoom) {
+      showCallError('Connexion au serveur de signalisation perdue.');
+      hangup();
+    }
   };
 }
 
@@ -450,7 +485,7 @@ async function handleSignal(msg){
 
 function createPeer(id){
   if (peers[id]) return peers[id];
-  const pc = new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+  const pc = new RTCPeerConnection({iceServers: ICE_SERVERS});
 
   // Propriétés pour la négociation parfaite
   pc._isPolite = Number(client_id) < Number(id);
@@ -474,6 +509,9 @@ function createPeer(id){
     }
   };
   pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'failed'){
+      showCallError('Connexion entre pairs échouée. Vérifiez votre connexion réseau ou la configuration NAT/pare-feu.');
+    }
     if (['disconnected','failed','closed'].includes(pc.connectionState)){
       document.getElementById('remote_'+id)?.remove();
       if (!document.getElementById('remoteVideos').hasChildNodes()) {
@@ -527,7 +565,10 @@ function toggleVideo(){
       Object.values(peers).forEach(pc=>pc.addTrack(track, localStream));
       videoEnabled = true;
       document.getElementById('videoBtn').textContent = 'Désactiver vidéo';
-    }).catch(err=>console.error('video', err));
+    }).catch(err=>{
+      console.error('video', err);
+      showCallError(mediaErrorMessage(err));
+    });
   }
 }
 
@@ -561,6 +602,7 @@ function hangup(){
   document.getElementById('remoteVideos').innerHTML = '';
   const overlay = document.getElementById('callOverlay');
   overlay.classList.remove('active','with-remote');
+  showCallError('');
 }
 
 function isFriend(id){
