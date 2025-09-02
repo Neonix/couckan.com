@@ -178,6 +178,7 @@ const storedId = localStorage.getItem('chatUid');
 let ws, name, client_id = storedId, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false;
 let notifState = 'all', locationState = 'none';
+let flyToNewUsers = true;
 const mutedUsers = new Set();
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
@@ -303,9 +304,17 @@ locBtn.onclick = () => {
 toolbar.appendChild(locBtn);
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
+  function updateHomeBtnTitle() {
+    homeBtn.title = flyToNewUsers
+      ? 'Vue globale + suivi des nouvelles connexions'
+      : 'Vue globale fixe';
+  }
+  updateHomeBtnTitle();
   homeBtn.addEventListener('click', () => {
     chatWrapper.classList.remove('active');
     document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
+    flyToNewUsers = !flyToNewUsers;
+    updateHomeBtnTitle();
   });
 }
 
@@ -641,8 +650,9 @@ let rooms = new Map([['general', {visibility:'public', creator_id:null}]]);
 const q = new URLSearchParams(location.search);
 if (q.get('room')) rooms.set(q.get('room'), {visibility:'private', creator_id:null});
 
-function addOrUpdateLocation(loc){
+function addOrUpdateLocation(loc, fly = true){
   const id = loc.client_id;
+  const isNew = !locationEntities[id];
   let ent = locationEntities[id];
   const st = (clients[id] && clients[id].status) || 'online';
   const col = statusColors[st] || Cesium.Color.CYAN;
@@ -659,6 +669,9 @@ function addOrUpdateLocation(loc){
     ent.label.text = loc.client_name;
     ent.properties.name = loc.client_name;
     ent.point.color = col;
+  }
+  if (fly && isNew && flyToNewUsers && id !== client_id) {
+    viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 1000000)});
   }
 }
 
@@ -848,7 +861,7 @@ function onmessage(e){
     }
 
     case 'locations': {
-      (data.locations || []).forEach(l => addOrUpdateLocation(l));
+      (data.locations || []).forEach(l => addOrUpdateLocation(l, false));
       break;
     }
 
