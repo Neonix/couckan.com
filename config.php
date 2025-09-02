@@ -8,13 +8,13 @@ $_config = [
 ];
 
 // STUN/TURN servers used by WebRTC
-// Couckan self-hosted TURN server is exposed via nginx on 5349 or proxied on /turn for port 443-only environments
+// Couckan self-hosted TURN server exposed via nginx
 $_config['ice_servers'] = [
     [
-        'urls' => $_config['localdev'] ? 'stun:localhost:5349' : 'stun:couckan.com/turn'
+        'urls' => $_config['localdev'] ? 'stun:localhost:3478' : 'stun:couckan.com:3478',
     ],
     [
-        'urls' => $_config['localdev'] ? 'turns:localhost:5349?transport=tcp' : 'turns:couckan.com/turn?transport=tcp',
+        'urls' => $_config['localdev'] ? 'turns:localhost:5349?transport=tcp' : 'turns:couckan.com:5349?transport=tcp',
         'username' => 'couckan',
         'credential' => 'couckan',
     ],
