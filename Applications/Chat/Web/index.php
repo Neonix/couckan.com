@@ -23,6 +23,8 @@ include __DIR__ . '/../../../config.php';
     .cesium-viewer-toolbar{z-index:30}
     .cesium-toolbar-button{margin:2px}
     .cesium-home-button.auto-fly-disabled{filter:grayscale(1);opacity:.5}
+    .home-menu{position:absolute;top:100%;left:0;display:none;flex-direction:column;background:var(--panel);border:1px solid var(--muted-2);border-radius:6px;padding:4px;z-index:40}
+    .home-menu button{width:100%;margin:2px 0;text-align:left}
     .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
     .sidebar details{display:flex;flex-direction:column;gap:.75rem;padding:1rem}
     .sidebar summary{list-style:none;cursor:pointer}
@@ -177,8 +179,8 @@ function getUserMedia(constraints){
 
 const storedId = localStorage.getItem('chatUid');
 let ws, name, client_id = storedId, status = 'online', clients = {};
-let locationWatchId = null, hasFlownToLocation = false;
-let notifState = 'all', locationState = 'none';
+let locationWatchId = null, hasFlownToLocation = false, myLat = null, myLon = null;
+let notifState = 'all', locationState = 'all';
 let autoFlyNewUsers = true;
 const autoFlyVisited = new Set();
 const mutedUsers = new Set();
@@ -297,6 +299,7 @@ function updateLocBtn(){
   else { locBtn.textContent = '🚫📍'; locBtn.title = 'Localisation désactivée'; }
 }
 updateLocBtn();
+shareLocation();
 locBtn.onclick = () => {
   locationState = locationState === 'all' ? 'friends' : locationState === 'friends' ? 'none' : 'all';
   if (locationState === 'none') stopLocation();
@@ -306,23 +309,60 @@ locBtn.onclick = () => {
 toolbar.appendChild(locBtn);
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
-  function updateHomeBtnState(){
-    homeBtn.title = autoFlyNewUsers ? 'Auto vol vers nouveaux utilisateurs activé' : 'Auto vol vers nouveaux utilisateurs désactivé';
-    homeBtn.classList.toggle('auto-fly-disabled', !autoFlyNewUsers);
-  }
-  updateHomeBtnState();
-  // Intercept the Cesium home button command to toggle auto‑fly without
-  // triggering its default camera reset. Cesium's Command uses an Event
-  // interface where listeners are registered via `addEventListener`.
-  viewer.homeButton.viewModel.command.beforeExecute.addEventListener(e => {
-    e.cancel = true;
+  const homeContainer = document.createElement('div');
+  homeContainer.style.position = 'relative';
+  homeBtn.parentNode.insertBefore(homeContainer, homeBtn);
+  homeContainer.appendChild(homeBtn);
+
+  const homeMenu = document.createElement('div');
+  homeMenu.className = 'home-menu';
+  homeContainer.appendChild(homeMenu);
+
+  const resetItem = document.createElement('button');
+  resetItem.className = 'cesium-button cesium-toolbar-button';
+  resetItem.textContent = 'Reset Globe';
+  resetItem.onclick = () => {
+    viewer.camera.flyHome();
+    homeMenu.style.display = 'none';
+  };
+
+  const autoItem = document.createElement('button');
+  autoItem.className = 'cesium-button cesium-toolbar-button';
+  autoItem.onclick = () => {
     autoFlyNewUsers = !autoFlyNewUsers;
     if (autoFlyNewUsers) {
       Object.keys(clients).forEach(id => autoFlyVisited.add(String(id)));
     }
     updateHomeBtnState();
-    chatWrapper.classList.remove('active');
-    document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
+    homeMenu.style.display = 'none';
+  };
+
+  const meItem = document.createElement('button');
+  meItem.className = 'cesium-button cesium-toolbar-button';
+  meItem.textContent = 'Vol vers moi';
+  meItem.onclick = () => {
+    if (myLat !== null && myLon !== null) {
+      viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(myLon, myLat, 1000000)});
+    }
+    homeMenu.style.display = 'none';
+  };
+
+  homeMenu.append(resetItem, autoItem, meItem);
+
+  function updateHomeBtnState(){
+    homeBtn.classList.toggle('auto-fly-disabled', !autoFlyNewUsers);
+    autoItem.textContent = autoFlyNewUsers ? 'Auto vol vers nouveaux utilisateurs activé' : 'Auto vol vers nouveaux utilisateurs désactivé';
+  }
+  updateHomeBtnState();
+  homeBtn.title = 'Options de vue';
+
+  viewer.homeButton.viewModel.command.beforeExecute.addEventListener(e => {
+    e.cancel = true;
+    homeMenu.style.display = homeMenu.style.display === 'flex' ? 'none' : 'flex';
+  });
+
+  document.addEventListener('click', ev => {
+    if (!homeContainer.contains(ev.target)) homeMenu.style.display = 'none';
   });
 }
 
@@ -726,11 +766,15 @@ function shareLocation(){
 
   const sendPosition = pos => {
     const {latitude, longitude} = pos.coords;
+    myLat = latitude;
+    myLon = longitude;
     if (!hasFlownToLocation) {
       viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1000000)});
       hasFlownToLocation = true;
     }
-    ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude, share: locationState}));
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude, share: locationState}));
+    }
   };
 
   const errorHandler = err => {
@@ -751,6 +795,8 @@ function stopLocation(){
   }
   if (ws) ws.send(JSON.stringify({type:'location_remove'}));
   removeLocation(client_id);
+  myLat = myLon = null;
+  hasFlownToLocation = false;
 }
 
 /* =========================
@@ -781,6 +827,9 @@ function connect(){
     if (!name) name = localStorage.getItem('chatName') || 'Invité';
     // login première room : soit "general", soit celle de l'URL si présente
     loginRoom([...rooms.keys()][0]);
+    if (myLat !== null && myLon !== null) {
+      ws.send(JSON.stringify({type:'location', lat: myLat, lon: myLon, share: locationState}));
+    }
   };
 
   ws.onmessage = onmessage;
