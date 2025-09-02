@@ -688,13 +688,17 @@ function maybeFlyToNewUser(loc){
     autoFlyVisited.add(id);
     return;
   }
+  const lat = Number(loc.lat);
+  const lon = Number(loc.lon);
+  const hasRealLocation = Math.abs(lat) > 0.0001 || Math.abs(lon) > 0.0001;
+  if (!hasRealLocation) return;
   if (
     !autoFlyVisited.has(id) &&
     autoFlyNewUsers &&
     locationState === 'all' &&
     hasFlownToLocation
   ) {
-    viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 1000000)});
+    viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(lon, lat, 1000000)});
   }
   autoFlyVisited.add(id);
 }
