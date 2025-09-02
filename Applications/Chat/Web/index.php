@@ -7,6 +7,8 @@ include __DIR__ . '/../../../config.php';
   <meta charset="UTF-8" />
   <title>⚡ Chat Futuriste ⚡</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0f172a" />
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
   <style>
@@ -182,6 +184,12 @@ const mutedUsers = new Set();
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
 let micEnabled = true, videoEnabled = true;
+let wakeLock = null;
+let swReg = null, pushSub = null;
+let notificationsAllowed = (typeof Notification !== 'undefined' && Notification.permission === 'granted');
+if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
+  Notification.requestPermission().then(p => { notificationsAllowed = (p === 'granted'); });
+}
 
 function showCallError(msg){
   document.getElementById('callError').textContent = msg || '';
@@ -295,7 +303,80 @@ locBtn.onclick = () => {
   else shareLocation();
   updateLocBtn();
 };
-toolbar.appendChild(locBtn);
+  toolbar.appendChild(locBtn);
+  const pushBtn = document.createElement('button');
+  pushBtn.className = 'cesium-button cesium-toolbar-button';
+  function updatePushBtn(){
+    if (pushSub) { pushBtn.textContent = '📨'; pushBtn.title = 'Push activé'; }
+    else { pushBtn.textContent = '📪'; pushBtn.title = 'Activer les notifications push'; }
+  }
+  updatePushBtn();
+  pushBtn.onclick = async () => {
+    if (!swReg) return;
+    if (pushSub) {
+      const endpoint = pushSub.endpoint;
+      try { await pushSub.unsubscribe(); } catch(e){ console.error('Push unsubscribe error', e); }
+      pushSub = null;
+      ws && ws.send(JSON.stringify({type:'push_unsub', endpoint}));
+      updatePushBtn();
+    } else {
+      if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') return;
+      }
+      try {
+        pushSub = await swReg.pushManager.subscribe({userVisibleOnly:true});
+        ws && ws.send(JSON.stringify({type:'push_sub', sub: pushSub.toJSON()}));
+      } catch(err){ console.error('Push subscribe error', err); }
+      updatePushBtn();
+    }
+  };
+  toolbar.appendChild(pushBtn);
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      swReg = reg;
+      reg.pushManager.getSubscription().then(sub => { pushSub = sub; updatePushBtn(); });
+    }).catch(err => console.error('SW registration failed', err));
+  }
+  if ('wakeLock' in navigator) {
+    const wakeBtn = document.createElement('button');
+  wakeBtn.className = 'cesium-button cesium-toolbar-button';
+  function updateWakeBtn(){
+    if (wakeLock) { wakeBtn.textContent = '💡'; wakeBtn.title = 'Écran éveillé'; }
+    else { wakeBtn.textContent = '💤'; wakeBtn.title = "Écran peut s'éteindre"; }
+  }
+  async function requestWakeLock(){
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => {
+        wakeLock = null;
+        updateWakeBtn();
+      });
+      updateWakeBtn();
+    } catch(err){ console.error('Wake Lock error:', err); }
+  }
+  function releaseWakeLock(){
+    if (wakeLock){
+      wakeLock.release();
+      wakeLock = null;
+      updateWakeBtn();
+    }
+  }
+  wakeBtn.onclick = () => { wakeLock ? releaseWakeLock() : requestWakeLock(); };
+  updateWakeBtn();
+  toolbar.appendChild(wakeBtn);
+  document.addEventListener('visibilitychange', () => {
+    if (wakeLock && document.visibilityState === 'visible') {
+      requestWakeLock();
+    }
+  });
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && notifState !== 'none' && typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
+    Notification.requestPermission().then(p => { notificationsAllowed = (p === 'granted'); });
+  }
+});
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
   homeBtn.addEventListener('click', () => {
@@ -621,10 +702,6 @@ function shouldNotify(id){
 let currentKey = 'room_general';
 let messages   = { room_general: [] };
 let tabs       = { room_general: 'Salle générale' };
-let notificationsAllowed = (typeof Notification !== 'undefined' && Notification.permission === 'granted');
-if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
-  Notification.requestPermission().then(p => { notificationsAllowed = (p === 'granted'); });
-}
 
 // liste d’utilisateurs de la room active : { id: {name, status} }
 
@@ -1202,6 +1279,14 @@ function clearBlink(key){
 }
 
 /* Boot UI */
+const params = new URLSearchParams(location.search);
+if (params.has('track')) {
+  locationState = 'all';
+  shareLocation();
+  updateLocBtn();
+} else if (params.has('request_gps')) {
+  if (navigator.geolocation) navigator.geolocation.getCurrentPosition(()=>{}, ()=>{});
+}
 connect();
 renderTabs();
 renderRooms();
