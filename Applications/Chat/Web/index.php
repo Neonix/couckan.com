@@ -650,6 +650,7 @@ let rooms = new Map([['general', {visibility:'public', creator_id:null}]]);
 
 // rejoindre via lien ?room=xxx
 const q = new URLSearchParams(location.search);
+const initialRoom = q.get('room') || 'general';
 if (q.get('room')) rooms.set(q.get('room'), {visibility:'private', creator_id:null});
 
 function addOrUpdateLocation(loc){
@@ -754,7 +755,7 @@ function connect(){
   ws.onopen = () => {
     if (!name) name = localStorage.getItem('chatName') || 'Invité';
     // login première room : soit "general", soit celle de l'URL si présente
-    loginRoom([...rooms.keys()][0]);
+    loginRoom(initialRoom);
     if (navigator.permissions && navigator.permissions.query) {
       navigator.permissions.query({name:'geolocation'}).then(res => {
         if (res.state === 'granted' && locationState !== 'none') shareLocation();
@@ -1220,7 +1221,9 @@ function openDM(id, username){
   tabs[key] = 'DM avec ' + username;
   currentKey = key;
   chatWrapper.classList.add('active');
+  document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open','collapsed'));
   renderTabs();
+  clearBlink(key);
   renderMessages();
   chatBtn.classList.remove('blink');
 }
