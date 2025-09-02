@@ -424,6 +424,11 @@ function handleSignal(msg){
 function createPeer(id){
   if (peers[id]) return peers[id];
   const pc = new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+  // Pré-ajoute des transceivers audio/vidéo pour conserver l'ordre des m-lines
+  // lors des offres successives afin d'éviter les erreurs de négociation
+  pc.addTransceiver('audio', {direction:'sendrecv'});
+  pc.addTransceiver('video', {direction:'sendrecv'});
+  
   // Chaque peer garde une référence à son flux distant pour y ajouter les pistes progressivement
   pc._remoteStream = new MediaStream();
   peers[id] = pc;
