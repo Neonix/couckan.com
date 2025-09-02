@@ -11,18 +11,23 @@ include __DIR__ . '/../../../config.php';
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
   <style>
     :root{
-      --bg:#0f172a; --panel:#1e293b; --muted:#334155; --muted-2:#475569;
+      --bg:#0f172a; --panel:rgba(30,41,59,.55); --muted:rgba(51,65,85,.45); --muted-2:rgba(71,85,105,.55);
       --accent:#0ea5e9; --text:#f8fafc; --sub:#94a3b8;
       --ok:#22c55e; --busy:#f97316; --away:#ef4444; --warn:#facc15; --invisible:#6b7280;
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
-    #chatWrapper{position:fixed;left:0;right:0;bottom:0;top:auto;display:none;height:40vh;max-height:400px;overflow:hidden;z-index:10}
+    #chatWrapper{position:fixed;left:0;right:0;bottom:0;top:auto;display:none;height:35vh;max-height:340px;overflow:hidden;z-index:10;background:rgba(15,23,42,.35);backdrop-filter:blur(8px)}
     #chatWrapper.active{display:flex}
     .cesium-viewer-toolbar{z-index:30}
     .cesium-toolbar-button{margin:2px}
-    .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
+    .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);backdrop-filter:blur(6px);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease;position:relative}
+    .collapse-btn{position:absolute;top:.5rem;right:-14px;background:var(--panel);border:none;color:var(--text);border-radius:0 6px 6px 0;padding:.25rem;cursor:pointer}
+    .sidebar.users .collapse-btn{left:-14px;right:auto;border-radius:6px 0 0 6px}
+    .sidebar.collapsed{flex:0 0 16px;width:16px}
+    .sidebar.collapsed > :not(.collapse-btn){display:none}
+    .sidebar.collapsed .collapse-btn{transform:rotate(180deg)}
     .sidebar details{display:flex;flex-direction:column;gap:.75rem;padding:1rem}
     .sidebar summary{list-style:none;cursor:pointer}
     .sidebar summary::-webkit-details-marker{display:none}
@@ -34,12 +39,12 @@ include __DIR__ . '/../../../config.php';
     .item.blink{animation:blink 1s infinite}
     @keyframes blink{0%,50%{background:var(--accent)}25%,75%{background:var(--warn)}}
     .row{display:flex;gap:.5rem}
-    .row input[type=text]{flex:1;background:#0b1220;border:1px solid #214055;color:#cbd5e1;padding:.45rem .6rem;border-radius:6px;outline:none}
+    .row input[type=text]{flex:1;background:rgba(11,18,32,.4);border:1px solid rgba(33,64,85,.6);color:#cbd5e1;padding:.45rem .6rem;border-radius:6px;outline:none}
     .row label{display:flex;align-items:center;gap:.35rem;color:#cbd5e1;font-size:.9rem}
     .btn{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:.4rem .65rem;cursor:pointer}
     .btn.secondary{background:var(--muted);color:#e5e7eb}
     .chat{flex:1;display:flex;flex-direction:column}
-    .tabs{display:flex;align-items:center;gap:.5rem;background:var(--panel);padding:.5rem 1rem;flex-wrap:wrap}
+    .tabs{display:flex;align-items:center;gap:.5rem;background:var(--panel);backdrop-filter:blur(6px);padding:.5rem 1rem;flex-wrap:wrap}
     .tab{background:var(--muted);border-radius:6px;padding:.28rem .55rem;display:flex;align-items:center;gap:.4rem;cursor:pointer}
     .tab.active{background:var(--accent);color:#fff}
     .tab.blink{animation:blink 1s infinite}
@@ -47,19 +52,21 @@ include __DIR__ . '/../../../config.php';
     .tab .actions{display:flex;align-items:center;gap:.25rem}
     .icon-btn{background:transparent;border:none;color:inherit;cursor:pointer;font-size:14px;opacity:.9}
     .icon-btn:hover{opacity:1}
-    .messages{flex:1;overflow-y:auto;padding:1rem;background:#0b1220}
+    .messages{flex:1;overflow-y:auto;padding:1rem;background:rgba(11,18,32,.35);backdrop-filter:blur(4px)}
     .msg{margin-bottom:12px;max-width:72%}
     .msg.me{margin-left:auto;text-align:right}
     .msg small{display:block;color:var(--sub);font-size:.72rem;margin-bottom:2px}
-    .input{display:flex;gap:.5rem;background:var(--panel);padding:.6rem}
-    .input textarea{flex:1;min-height:42px;max-height:160px;resize:vertical;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.6rem;border-radius:8px}
+    .msg.event{margin:8px auto;text-align:center;color:var(--sub);font-style:italic;cursor:pointer;max-width:90%}
+    .msg.event:hover{background:var(--muted);border-radius:6px}
+    .input{display:flex;gap:.5rem;background:var(--panel);padding:.6rem;backdrop-filter:blur(4px)}
+    .input textarea{flex:1;min-height:42px;max-height:160px;resize:vertical;background:rgba(11,18,32,.4);border:1px solid rgba(32,50,68,.6);color:#e5e7eb;padding:.6rem;border-radius:8px}
     .input button{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:.55rem 1rem;cursor:pointer}
     .dot{width:10px;height:10px;border-radius:50%}
     .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)} .dot.invisible{background:var(--invisible)}
-    .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
+    .select{width:100%;background:rgba(11,18,32,.4);border:1px solid rgba(32,50,68,.6);color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
     .mobile-nav{display:none}
-    .profile-popup{position:absolute;display:none;flex-direction:column;gap:.25rem;padding:.5rem;background:var(--panel);border:1px solid var(--muted-2);border-radius:8px;z-index:40;min-width:160px}
+    .profile-popup{position:absolute;display:none;flex-direction:column;gap:.25rem;padding:.5rem;background:var(--panel);backdrop-filter:blur(4px);border:1px solid var(--muted-2);border-radius:8px;z-index:40;min-width:160px}
     .profile-popup.active{display:flex}
     .profile-popup .title{font-weight:700;margin-bottom:.25rem}
     .profile-popup button{background:var(--muted);color:var(--text);border:none;border-radius:6px;padding:.3rem .5rem;cursor:pointer}
@@ -79,17 +86,19 @@ include __DIR__ . '/../../../config.php';
       .sidebar{position:absolute;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
       .sidebar.users{left:auto;right:0;transform:translateX(100%)}
       .sidebar.open{transform:translateX(0)}
-      .mobile-nav{display:flex;justify-content:space-around;gap:.5rem;background:var(--panel);position:absolute;bottom:0;left:0;right:0;z-index:25;padding:.5rem}
+      .mobile-nav{display:flex;justify-content:space-around;gap:.5rem;background:var(--panel);backdrop-filter:blur(6px);position:absolute;bottom:0;left:0;right:0;z-index:25;padding:.5rem}
       .mobile-nav button{flex:1;border:none;background:var(--muted);color:var(--text);border-radius:6px;padding:.5rem}
       .cesium-viewer-toolbar{display:flex;flex-wrap:wrap;gap:.4rem}
+      .collapse-btn{display:none}
     }
   </style>
 </head>
 <body>
   <div id="cesiumContainer"></div>
-  <div id="chatWrapper">
+  <div id="chatWrapper" class="active">
   <!-- Salles -->
   <aside class="sidebar rooms">
+    <button class="collapse-btn" onclick="collapseSidebar(this)">‹</button>
     <details open>
       <summary class="h2">🛰️ Salles</summary>
       <div id="rooms" class="list"></div>
@@ -116,6 +125,7 @@ include __DIR__ . '/../../../config.php';
 
   <!-- Utilisateurs -->
   <aside class="sidebar users">
+    <button class="collapse-btn" onclick="collapseSidebar(this)">›</button>
     <details open>
       <summary class="h2">👥 Utilisateurs</summary>
       <div id="users" class="list"></div>
@@ -235,12 +245,21 @@ const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
 const profilePopup = document.getElementById('profilePopup');
 function toggleRooms(){
-  document.querySelector('.sidebar.rooms').classList.toggle('open');
-  document.querySelector('.sidebar.users').classList.remove('open');
+  const rooms = document.querySelector('.sidebar.rooms');
+  const users = document.querySelector('.sidebar.users');
+  rooms.classList.toggle('open');
+  rooms.classList.remove('collapsed');
+  users.classList.remove('open','collapsed');
 }
 function toggleUsers(){
-  document.querySelector('.sidebar.users').classList.toggle('open');
-  document.querySelector('.sidebar.rooms').classList.remove('open');
+  const users = document.querySelector('.sidebar.users');
+  const rooms = document.querySelector('.sidebar.rooms');
+  users.classList.toggle('open');
+  users.classList.remove('collapsed');
+  rooms.classList.remove('open','collapsed');
+}
+function collapseSidebar(btn){
+  btn.parentElement.classList.toggle('collapsed');
 }
 // place Cesium toolbar above chat overlay so buttons stay visible
 toolbar.style.zIndex = 30;
@@ -813,6 +832,9 @@ function onmessage(e){
         // Sécurité : merge si pas de client_list
         clients[data.client_id] = {name: data.client_name, status: data.status || 'online'};
         renderUsers();
+        if (String(data.client_id) !== String(client_id)) {
+          addEvent(`${data.client_name} vient de se connecter`, data.client_id, data.client_name);
+        }
       }
       break;
     }
@@ -922,6 +944,10 @@ function onmessage(e){
     }
 
     case 'logout': {
+      const uname = clients[data.from_client_id]?.name || 'Utilisateur';
+      if (String(data.from_client_id) !== String(client_id)) {
+        addEvent(`${uname} s'est déconnecté`, data.from_client_id, uname);
+      }
       delete clients[data.from_client_id];
       renderUsers();
       break;
@@ -1136,6 +1162,26 @@ function storeMessage(m){
   return key;
 }
 
+function addEvent(text, userId, userName){
+  const evt = {type:'event', content:text, time:new Date().toLocaleTimeString(), user_id:userId, user_name:userName};
+  const key = 'room_general';
+  if (!messages[key]) messages[key] = [];
+  messages[key].push(evt);
+  if (currentKey === key && chatWrapper.classList.contains('active')) {
+    renderMessages();
+  } else {
+    blinkTab(key);
+    chatBtn.classList.add('blink');
+  }
+  if (notificationsAllowed && notifState !== 'none' && !chatWrapper.classList.contains('active')) {
+    const n = new Notification(text);
+    n.onclick = () => {
+      chatWrapper.classList.add('active');
+      if (userId) openDM(userId, userName || '');
+    };
+  }
+}
+
 function getMessageKey(m){
   if (m.dm) {
     // clé = partenaire (pas moi)
@@ -1151,8 +1197,14 @@ function renderMessages(){
   const list = messages[currentKey] || [];
   for (const m of list) {
     const div = document.createElement('div');
-    div.className = 'msg ' + (String(m.from_client_id) === String(client_id) ? 'me' : 'other');
-    div.innerHTML = `<small>${m.from_client_name} • ${m.time || ''}</small>${m.content}`;
+    if (m.type === 'event') {
+      div.className = 'msg event';
+      div.innerHTML = `<small>${m.time || ''}</small>${m.content}`;
+      if (m.user_id) div.onclick = () => openDM(m.user_id, m.user_name || '');
+    } else {
+      div.className = 'msg ' + (String(m.from_client_id) === String(client_id) ? 'me' : 'other');
+      div.innerHTML = `<small>${m.from_client_name} • ${m.time || ''}</small>${m.content}`;
+    }
     box.appendChild(div);
   }
   box.scrollTop = box.scrollHeight;
