@@ -67,6 +67,9 @@ include __DIR__ . '/../../../config.php';
     #callOverlay{position:fixed;top:0;left:0;right:0;bottom:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.8);z-index:50}
     #callOverlay.active{display:flex}
     #callOverlay video{max-width:90%;max-height:80%;background:#000;border-radius:8px;margin:.5rem}
+    #callOverlay.with-remote #localVideo{position:absolute;bottom:1rem;right:1rem;width:25%;max-width:200px;border:2px solid #fff;z-index:60}
+    #callOverlay.with-remote #remoteVideos{flex:1;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+    #callOverlay.with-remote #remoteVideos video{max-width:100%;max-height:100%}
     #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
     #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
     @media (max-width:768px){
@@ -391,7 +394,7 @@ function signalSend(msg){
   }
 }
 
-function handleSignal(msg){
+async function handleSignal(msg){
   switch(msg.type){
     case 'join':
       if (msg.from === client_id) return;
@@ -402,22 +405,45 @@ function handleSignal(msg){
     case 'offer':
       if (msg.to !== client_id) return;
       const pc2 = createPeer(msg.from);
-      pc2.setRemoteDescription(new RTCSessionDescription(msg.sdp));
-      pc2.createAnswer().then(a=>{pc2.setLocalDescription(a); signalSend({type:'answer', from:client_id, to:msg.from, sdp:a});});
+      const offerCollision = pc2._makingOffer || pc2.signalingState !== 'stable';
+      pc2._ignoreOffer = !pc2._isPolite && offerCollision;
+      if (pc2._ignoreOffer) return;
+      try {
+        await pc2.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        await pc2.setLocalDescription(await pc2.createAnswer());
+        signalSend({type:'answer', from:client_id, to:msg.from, sdp:pc2.localDescription});
+      } catch(err){
+        console.error('offer', err);
+      }
       break;
     case 'answer':
       if (msg.to !== client_id) return;
-      peers[msg.from]?.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      const pc3 = peers[msg.from];
+      if (!pc3) return;
+      try {
+        await pc3.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      } catch(err){
+        console.error('answer', err);
+      }
       break;
     case 'candidate':
       if (msg.to !== client_id) return;
-      peers[msg.from]?.addIceCandidate(new RTCIceCandidate(msg.candidate));
+      const pc4 = peers[msg.from];
+      if (!pc4 || pc4._ignoreOffer) return;
+      try {
+        await pc4.addIceCandidate(new RTCIceCandidate(msg.candidate));
+      } catch(err){
+        console.error('candidate', err);
+      }
       break;
     case 'leave':
       if (msg.from === client_id) return;
       peers[msg.from]?.close();
       delete peers[msg.from];
       document.getElementById('remote_'+msg.from)?.remove();
+      if (!document.getElementById('remoteVideos').hasChildNodes()) {
+        document.getElementById('callOverlay').classList.remove('with-remote');
+      }
       break;
   }
 }
@@ -425,37 +451,34 @@ function handleSignal(msg){
 function createPeer(id){
   if (peers[id]) return peers[id];
   const pc = new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
-  // Pré-ajoute des transceivers audio/vidéo pour conserver l'ordre des m-lines
-  // lors des offres successives afin d'éviter les erreurs de négociation
-  pc.addTransceiver('audio', {direction:'sendrecv'});
-  pc.addTransceiver('video', {direction:'sendrecv'});
-  
-  // Chaque peer garde une référence à son flux distant pour y ajouter les pistes progressivement
-  pc._remoteStream = new MediaStream();
+
+  // Propriétés pour la négociation parfaite
+  pc._isPolite = Number(client_id) < Number(id);
+  pc._makingOffer = false;
+  pc._ignoreOffer = false;
+
   peers[id] = pc;
   if (localStream) localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
   pc.onicecandidate = e => { if (e.candidate) signalSend({type:'candidate', from:client_id, to:id, candidate:e.candidate}); };
-  pc.ontrack = e => {
-    // Ajoute chaque piste reçue au flux unique afin d'éviter de remplacer la vidéo par l'audio
-    pc._remoteStream.addTrack(e.track);
-    addRemoteStream(id, pc._remoteStream);
-  };
-  let negotiating = false;
+  // Ajoute directement le premier flux reçu (audio+vidéo) au lecteur distant
+  pc.ontrack = e => addRemoteStream(id, e.streams[0]);
   pc.onnegotiationneeded = async () => {
-    if (negotiating || pc.signalingState !== 'stable') return;
-    negotiating = true;
     try {
+      pc._makingOffer = true;
       await pc.setLocalDescription(await pc.createOffer());
       signalSend({type:'offer', from:client_id, to:id, sdp:pc.localDescription});
     } catch(err){
       console.error('negotiation', err);
     } finally {
-      negotiating = false;
+      pc._makingOffer = false;
     }
   };
   pc.onconnectionstatechange = () => {
     if (['disconnected','failed','closed'].includes(pc.connectionState)){
       document.getElementById('remote_'+id)?.remove();
+      if (!document.getElementById('remoteVideos').hasChildNodes()) {
+        document.getElementById('callOverlay').classList.remove('with-remote');
+      }
       delete peers[id];
     }
   };
@@ -478,6 +501,7 @@ function addRemoteStream(id, stream){
   if (playPromise !== undefined) {
     playPromise.catch(()=>{});
   }
+  document.getElementById('callOverlay').classList.add('with-remote');
 }
 
 function toggleMic(){
@@ -535,7 +559,8 @@ function hangup(){
   }
   callRoom = null;
   document.getElementById('remoteVideos').innerHTML = '';
-  document.getElementById('callOverlay').classList.remove('active');
+  const overlay = document.getElementById('callOverlay');
+  overlay.classList.remove('active','with-remote');
 }
 
 function isFriend(id){
