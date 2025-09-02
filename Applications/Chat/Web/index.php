@@ -190,6 +190,7 @@ const storedId = localStorage.getItem('chatUid');
 let ws, name, client_id = storedId, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false;
 let notifState = 'all', locationState = 'all';
+let autoFlyNewUsers = false;
 const mutedUsers = new Set();
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
@@ -300,9 +301,9 @@ chatBtn.onclick = () => {
     updateChatBtn();
     ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
   }
-  chatWrapper.classList.toggle('active');
-  if (chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink');
-  document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
+  openChat();
+  chatBtn.classList.remove('blink');
+  document.getElementById('input').focus();
 };
 toolbar.appendChild(chatBtn);
 const notifBtn = document.createElement('button');
@@ -339,8 +340,8 @@ toolbar.appendChild(locBtn);
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
   homeBtn.addEventListener('click', () => {
-    chatWrapper.classList.remove('active');
-    document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
+    viewer.camera.flyHome();
+    autoFlyNewUsers = true;
   });
 }
 
@@ -697,6 +698,7 @@ if (q.get('room')) rooms.set(q.get('room'), {visibility:'private', creator_id:nu
 
 function addOrUpdateLocation(loc){
   const id = loc.client_id;
+  const isNew = !locationEntities[id];
   let ent = locationEntities[id];
   const st = (clients[id] && clients[id].status) || 'online';
   const col = statusColors[st] || Cesium.Color.CYAN;
@@ -713,6 +715,9 @@ function addOrUpdateLocation(loc){
     ent.label.text = loc.client_name;
     ent.properties.name = loc.client_name;
     ent.point.color = col;
+  }
+  if (isNew && autoFlyNewUsers && String(id) !== String(client_id)) {
+    viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 1000000)});
   }
 }
 
