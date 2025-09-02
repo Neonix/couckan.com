@@ -66,7 +66,7 @@ include __DIR__ . '/../../../config.php';
     .select{width:100%;background:rgba(11,18,32,.4);border:1px solid rgba(32,50,68,.6);color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
     .mobile-nav{display:none}
-    .profile-popup{position:absolute;display:none;flex-direction:column;gap:.25rem;padding:.5rem;background:var(--panel);backdrop-filter:blur(4px);border:1px solid var(--muted-2);border-radius:8px;z-index:40;min-width:160px}
+    .profile-popup{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);display:none;flex-direction:column;gap:.25rem;padding:.5rem;background:var(--panel);backdrop-filter:blur(4px);border:1px solid var(--muted-2);border-radius:8px;z-index:40;min-width:160px}
     .profile-popup.active{display:flex}
     .profile-popup .title{font-weight:700;margin-bottom:.25rem}
     .profile-popup button{background:var(--muted);color:var(--text);border:none;border-radius:6px;padding:.3rem .5rem;cursor:pointer}
@@ -138,8 +138,10 @@ include __DIR__ . '/../../../config.php';
       </details>
   </aside>
   <div class="mobile-nav">
+    <button onclick="openChat()">Chat</button>
     <button onclick="toggleRooms()">Salles</button>
     <button onclick="toggleUsers()">Utilisateurs</button>
+    <button onclick="toggleProfile()">Profil</button>
   </div>
   </div>
   <div id="profilePopup" class="profile-popup"></div>
@@ -244,19 +246,38 @@ const statusColors = {
 const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
 const profilePopup = document.getElementById('profilePopup');
+
+function openChat(){
+  chatWrapper.classList.add('active');
+  document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
+  hideProfilePopup();
+}
+
 function toggleRooms(){
+  openChat();
   const rooms = document.querySelector('.sidebar.rooms');
   const users = document.querySelector('.sidebar.users');
   rooms.classList.toggle('open');
   rooms.classList.remove('collapsed');
   users.classList.remove('open','collapsed');
 }
+
 function toggleUsers(){
+  openChat();
   const users = document.querySelector('.sidebar.users');
   const rooms = document.querySelector('.sidebar.rooms');
   users.classList.toggle('open');
   users.classList.remove('collapsed');
   rooms.classList.remove('open','collapsed');
+}
+
+function toggleProfile(){
+  if (profilePopup.classList.contains('active')) hideProfilePopup();
+  else {
+    if (!name) name = localStorage.getItem('chatName') || 'Invité';
+    openChat();
+    showProfilePopup(client_id, name);
+  }
 }
 function collapseSidebar(btn){
   btn.parentElement.classList.toggle('collapsed');
@@ -360,15 +381,36 @@ function showProfilePopup(id, uname, position){
     b.onclick = () => { handler(); hideProfilePopup(); };
     profilePopup.appendChild(b);
   };
-  addBtn('Chat', () => { openDM(id, uname); });
-  addBtn('Suivre le pts GPS', () => { followGps(id); });
-  addBtn(mutedUsers.has(id) ? 'Activer les notifications' : 'Désactiver les notifications', () => { toggleUserNotif(id); });
-  addBtn('Wizz', () => { wizz(id); });
-  addBtn('Appel WebRTC', () => { startCall(id, false); });
-  addBtn('Visio WebRTC', () => { startCall(id, true); });
-  addBtn('Rejoindre un groupe', () => { joinGroup(id); });
-  profilePopup.style.left = position.x + 'px';
-  profilePopup.style.top = position.y + 'px';
+  if (id === client_id) {
+    addBtn('Changer de pseudo', () => {
+      const newName = prompt('Pseudo ?', uname);
+      if (newName && newName !== uname){
+        name = newName;
+        localStorage.setItem('chatName', name);
+        ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
+        updateChatBtn();
+      }
+    });
+  } else {
+    addBtn('Chat', () => { openDM(id, uname); });
+    addBtn('Suivre le pts GPS', () => { followGps(id); });
+    addBtn(mutedUsers.has(id) ? 'Activer les notifications' : 'Désactiver les notifications', () => { toggleUserNotif(id); });
+    addBtn('Wizz', () => { wizz(id); });
+    addBtn('Appel WebRTC', () => { startCall(id, false); });
+    addBtn('Visio WebRTC', () => { startCall(id, true); });
+    addBtn('Rejoindre un groupe', () => { joinGroup(id); });
+  }
+  if (position){
+    profilePopup.style.left = position.x + 'px';
+    profilePopup.style.top = position.y + 'px';
+    profilePopup.style.bottom = '';
+    profilePopup.style.transform = '';
+  } else {
+    profilePopup.style.left = '50%';
+    profilePopup.style.top = '';
+    profilePopup.style.bottom = '70px';
+    profilePopup.style.transform = 'translateX(-50%)';
+  }
   profilePopup.classList.add('active');
 }
 
