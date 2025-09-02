@@ -395,8 +395,9 @@ function handleSignal(msg){
   switch(msg.type){
     case 'join':
       if (msg.from === client_id) return;
-      const pc = createPeer(msg.from);
-      pc.createOffer().then(o=>{pc.setLocalDescription(o); signalSend({type:'offer', from:client_id, to:msg.from, sdp:o});});
+      // L'offre initiale sera générée par le gestionnaire `onnegotiationneeded`
+      // déclenché lors de l'ajout des pistes locales dans `createPeer`.
+      createPeer(msg.from);
       break;
     case 'offer':
       if (msg.to !== client_id) return;
