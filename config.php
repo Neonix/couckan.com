@@ -5,6 +5,14 @@ $_config = [
     'ssl'      => true,
     'localdev' => true,
     'geoip'    => false,
+    // Default STUN/TURN servers used by WebRTC
+    // Additional TURN servers can be added here to ensure connectivity
+    // between peers behind restrictive NATs.
+    'ice_servers' => [
+        ['urls' => 'stun:stun.l.google.com:19302'],
+        // Example TURN configuration (replace with your own server)
+        // ['urls' => 'turn:turn.example.com:3478', 'username' => 'user', 'credential' => 'pass'],
+    ],
 ];
 
 $scheme = $_config['ssl'] ? 'wss://' : 'ws://';
