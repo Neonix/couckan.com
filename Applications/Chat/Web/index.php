@@ -177,7 +177,7 @@ function getUserMedia(constraints){
 const storedId = localStorage.getItem('chatUid');
 let ws, name, client_id = storedId, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false;
-let notifState = 'all', locationState = 'all';
+let notifState = 'all', locationState = 'none';
 const mutedUsers = new Set();
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
@@ -276,7 +276,12 @@ updateNotifBtn();
 notifBtn.onclick = () => {
   notifState = notifState === 'all' ? 'friends' : notifState === 'friends' ? 'none' : 'all';
   if (notifState !== 'none' && typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
-    Notification.requestPermission().then(p => { notificationsAllowed = (p === 'granted'); });
+    // Safari utilise encore un callback alors que d'autres navigateurs renvoient une promesse
+    if (Notification.requestPermission.length === 0) {
+      Notification.requestPermission().then(p => { notificationsAllowed = (p === 'granted'); });
+    } else {
+      Notification.requestPermission(p => { notificationsAllowed = (p === 'granted'); });
+    }
   }
   updateNotifBtn();
 };
@@ -622,9 +627,9 @@ let currentKey = 'room_general';
 let messages   = { room_general: [] };
 let tabs       = { room_general: 'Salle générale' };
 let notificationsAllowed = (typeof Notification !== 'undefined' && Notification.permission === 'granted');
-if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
-  Notification.requestPermission().then(p => { notificationsAllowed = (p === 'granted'); });
-}
+// Sur certains navigateurs (ex. Safari), la demande de permission de notification
+// doit être déclenchée par un geste utilisateur. On évite donc de la lancer
+// automatiquement ici ; l'utilisateur pourra l'activer via le bouton dédié.
 
 // liste d’utilisateurs de la room active : { id: {name, status} }
 
@@ -735,11 +740,6 @@ function connect(){
     if (!name) name = localStorage.getItem('chatName') || 'Invité';
     // login première room : soit "general", soit celle de l'URL si présente
     loginRoom([...rooms.keys()][0]);
-    if (navigator.permissions && navigator.permissions.query) {
-      navigator.permissions.query({name:'geolocation'}).then(res => {
-        if (res.state === 'granted' && locationState !== 'none') shareLocation();
-      });
-    }
   };
 
   ws.onmessage = onmessage;
