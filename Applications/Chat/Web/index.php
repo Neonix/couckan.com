@@ -697,15 +697,17 @@ function maybeFlyToNewUser(loc){
   const hasRealLocation = Math.abs(lat) > 0.0001 || Math.abs(lon) > 0.0001;
   const share = loc.share || 'none';
   if (!hasRealLocation || share !== 'all') return;
+  if (autoFlyVisited.has(id)) return;
   if (
-    !autoFlyVisited.has(id) &&
     autoFlyNewUsers &&
     locationState === 'all' &&
     hasFlownToLocation
   ) {
     viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(lon, lat, 1000000)});
+    autoFlyVisited.add(id);
+  } else if (!autoFlyNewUsers) {
+    autoFlyVisited.add(id);
   }
-  autoFlyVisited.add(id);
 }
 
 function shareLocation(){
@@ -889,7 +891,12 @@ function onmessage(e){
 
     case 'locations': {
       (data.locations || []).forEach(l => {
-        autoFlyVisited.add(String(l.client_id));
+        const lat = Number(l.lat);
+        const lon = Number(l.lon);
+        const hasRealLocation = Math.abs(lat) > 0.0001 || Math.abs(lon) > 0.0001;
+        if (hasRealLocation && l.share === 'all') {
+          autoFlyVisited.add(String(l.client_id));
+        }
         addOrUpdateLocation(l);
       });
       break;
