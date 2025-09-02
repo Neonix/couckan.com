@@ -699,8 +699,9 @@ function shareLocation(){
   // iOS Safari requires getCurrentPosition to be called directly from a user gesture
   navigator.geolocation.getCurrentPosition(pos => {
     sendPosition(pos);
-    locationWatchId = navigator.geolocation.watchPosition(sendPosition, errorHandler, options);
   }, errorHandler, options);
+
+  locationWatchId = navigator.geolocation.watchPosition(sendPosition, errorHandler, options);
 }
 
 function stopLocation(){
