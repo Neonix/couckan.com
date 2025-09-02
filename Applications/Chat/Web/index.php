@@ -424,12 +424,15 @@ function handleSignal(msg){
 function createPeer(id){
   if (peers[id]) return peers[id];
   const pc = new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+  // Chaque peer garde une référence à son flux distant pour y ajouter les pistes progressivement
+  pc._remoteStream = new MediaStream();
   peers[id] = pc;
   if (localStream) localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
   pc.onicecandidate = e => { if (e.candidate) signalSend({type:'candidate', from:client_id, to:id, candidate:e.candidate}); };
   pc.ontrack = e => {
-    const stream = (e.streams && e.streams[0]) ? e.streams[0] : new MediaStream([e.track]);
-    addRemoteStream(id, stream);
+    // Ajoute chaque piste reçue au flux unique afin d'éviter de remplacer la vidéo par l'audio
+    pc._remoteStream.addTrack(e.track);
+    addRemoteStream(id, pc._remoteStream);
   };
   let negotiating = false;
   pc.onnegotiationneeded = async () => {
@@ -461,7 +464,14 @@ function addRemoteStream(id, stream){
     v.autoplay = true; v.playsInline = true;
     document.getElementById('remoteVideos').appendChild(v);
   }
-  v.srcObject = stream;
+  if (v.srcObject !== stream) {
+    v.srcObject = stream;
+  }
+  // Tente de démarrer la lecture pour éviter l'écran noir
+  const playPromise = v.play();
+  if (playPromise !== undefined) {
+    playPromise.catch(()=>{});
+  }
 }
 
 function toggleMic(){
@@ -539,6 +549,9 @@ let currentKey = 'room_general';
 let messages   = { room_general: [] };
 let tabs       = { room_general: 'Salle générale' };
 let notificationsAllowed = (typeof Notification !== 'undefined' && Notification.permission === 'granted');
+if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
+  Notification.requestPermission().then(p => { notificationsAllowed = (p === 'granted'); });
+}
 
 // liste d’utilisateurs de la room active : { id: {name, status} }
 
