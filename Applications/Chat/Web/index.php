@@ -311,7 +311,8 @@ if (homeBtn) {
     homeBtn.classList.toggle('auto-fly-disabled', !autoFlyNewUsers);
   }
   updateHomeBtnState();
-  homeBtn.addEventListener('click', () => {
+  viewer.homeButton.viewModel.command.beforeExecute.add(e => {
+    e.cancel = true;
     autoFlyNewUsers = !autoFlyNewUsers;
     if (autoFlyNewUsers) {
       Object.keys(clients).forEach(id => autoFlyVisited.add(String(id)));
