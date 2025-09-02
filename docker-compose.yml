@@ -15,14 +15,22 @@ services:
     volumes:
       - ./:/var/www/couckan/
     command: php start.php start   # foreground obligatoire
-    
+
+  turn:
+    image: coturn/coturn
+    container_name: couckan-turn
+    restart: always
+    command: ["--no-cli", "--log-file=stdout", "--realm=couckan.com", "--lt-cred-mech", "--user=couckan:couckan"]
+
   nginx:
     image: nginx:alpine
     container_name: couckan-nginx
     depends_on:
       - workerman
+      - turn
     ports:
       - "443:443"
+      - "5349:5349"
     volumes:
       - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./localhost.crt:/etc/nginx/certs/localhost.crt:ro
