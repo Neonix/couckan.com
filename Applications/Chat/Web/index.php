@@ -641,9 +641,6 @@ let currentKey = 'room_general';
 let messages   = { room_general: [] };
 let tabs       = { room_general: 'Salle générale' };
 let notificationsAllowed = (typeof Notification !== 'undefined' && Notification.permission === 'granted');
-if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
-  Notification.requestPermission().then(p => { notificationsAllowed = (p === 'granted'); });
-}
 
 // liste d’utilisateurs de la room active : { id: {name, status} }
 
@@ -707,7 +704,11 @@ function shareLocation(){
   };
 
   const errorHandler = err => {
-    console.warn('Erreur de localisation :', err.message);
+    const msg = (err && err.message) ? err.message : 'permission refusée';
+    console.warn('Erreur de localisation :', msg);
+    locationState = 'none';
+    updateLocBtn();
+    stopLocation();
   };
 
   // iOS Safari requires getCurrentPosition to be called directly from a user gesture
