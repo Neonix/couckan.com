@@ -88,12 +88,14 @@ class Events
                 // stocke la position dans la session pour la partager entre les workers
                 $_SESSION['lat'] = $randLat;
                 $_SESSION['lon'] = $randLon;
+                $_SESSION['share'] = 'none';
 
                 self::$locations[$client_uuid] = [
                     'client_id'   => $client_uuid,
                     'client_name' => $client_name,
                     'lat'         => $randLat,
                     'lon'         => $randLon,
+                    'share'       => 'none',
                 ];
                 $loc = self::$locations[$client_uuid];
                 $loc['type'] = 'location';
@@ -112,6 +114,7 @@ class Events
                         'client_name' => $sess['client_name'] ?? 'Invité',
                         'lat'         => $sess['lat'],
                         'lon'         => $sess['lon'],
+                        'share'       => $sess['share'] ?? 'none',
                     ];
                 }
 
@@ -166,6 +169,7 @@ class Events
                 $lat = $data['lat'] ?? null;
                 $lon = $data['lon'] ?? null;
                 if ($lat === null || $lon === null) return;
+                $share = $data['share'] ?? 'none';
                 $client_name = $_SESSION['client_name'] ?? 'Invité';
                 $uuid = $_SESSION['client_uuid'] ?? $client_id;
                 self::$locations[$uuid] = [
@@ -173,9 +177,11 @@ class Events
                     'client_name' => $client_name,
                     'lat'         => (float)$lat,
                     'lon'         => (float)$lon,
+                    'share'       => $share,
                 ];
                 $_SESSION['lat'] = (float)$lat;
                 $_SESSION['lon'] = (float)$lon;
+                $_SESSION['share'] = $share;
                 $msg = self::$locations[$uuid];
                 $msg['type'] = 'location';
                 Gateway::sendToAll(json_encode($msg));
@@ -186,7 +192,7 @@ class Events
                 $uuid = $_SESSION['client_uuid'] ?? $client_id;
                 if (isset(self::$locations[$uuid])) {
                     unset(self::$locations[$uuid]);
-                    unset($_SESSION['lat'], $_SESSION['lon']);
+                    unset($_SESSION['lat'], $_SESSION['lon'], $_SESSION['share']);
                     Gateway::sendToAll(json_encode(['type'=>'location_remove','client_id'=>$uuid]));
                 }
                 return;

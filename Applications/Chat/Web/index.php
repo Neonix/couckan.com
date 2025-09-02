@@ -695,7 +695,8 @@ function maybeFlyToNewUser(loc){
   const lat = Number(loc.lat);
   const lon = Number(loc.lon);
   const hasRealLocation = Math.abs(lat) > 0.0001 || Math.abs(lon) > 0.0001;
-  if (!hasRealLocation) return;
+  const share = loc.share || 'none';
+  if (!hasRealLocation || share !== 'all') return;
   if (
     !autoFlyVisited.has(id) &&
     autoFlyNewUsers &&
@@ -727,7 +728,7 @@ function shareLocation(){
       viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1000000)});
       hasFlownToLocation = true;
     }
-    ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
+    ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude, share: locationState}));
   };
 
   const errorHandler = err => {
