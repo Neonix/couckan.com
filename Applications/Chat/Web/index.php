@@ -82,7 +82,7 @@ include __DIR__ . '/../../../config.php';
     #callOverlay .error{color:#f87171;margin-top:.5rem;text-align:center}
     #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
     #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
-    #startOverlay{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;gap:2rem;background:rgba(0,0,0,.5);z-index:200}
+    #startOverlay{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;gap:5rem;background:rgba(0,0,0,.5);z-index:200}
     #startOverlay .choice{background:var(--panel);color:var(--text);padding:2rem 3rem;border-radius:12px;text-align:center;font-size:1.5rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:.5rem}
     #startOverlay .choice span{font-size:2.5rem}
     @media (max-width:768px){
@@ -99,7 +99,7 @@ include __DIR__ . '/../../../config.php';
   <div id="cesiumContainer"></div>
   <div id="startOverlay">
     <div class="choice" id="watchBtn"><span>👁️</span>Regarder</div>
-    <div class="choice" id="playBtn"><span>📍</span>Jouer</div>
+    <div class="choice" id="playBtn"><span>📍</span>- Jouer -</div>
   </div>
   <div id="chatWrapper">
   <!-- Chat -->
@@ -364,7 +364,7 @@ document.getElementById('watchBtn').onclick = () => {
   showToast('Vous allez être posé sur Null Island (0 latitude, 0 longitude)');
   startOverlay.style.display = 'none';
   viewer.trackedEntity = null;
-  viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(0,0,1000000)});
+  viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(0,0,30000000)});
 };
 document.getElementById('playBtn').onclick = () => {
   pendingLocationMsg = 'Vous allez être posé sur la Terre';
