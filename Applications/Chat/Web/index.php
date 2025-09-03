@@ -407,6 +407,7 @@ handler.setInputAction(function(click){
   if (Cesium.defined(picked) && picked.id && picked.id.properties && picked.id.properties.client_id) {
     const id = picked.id.properties.client_id.getValue();
     const uname = picked.id.properties.name.getValue();
+    followGps(id);
     showProfilePopup(id, uname, click.position);
   } else {
     hideProfilePopup();
@@ -446,6 +447,9 @@ function hideProfilePopup(){
 function followGps(id){
   if (locationEntities[id]) {
     viewer.trackedEntity = locationEntities[id];
+    viewer.selectedEntity = locationEntities[id];
+    const title = document.querySelector('.cesium-infoBox-title');
+    if (title) title.textContent = locationEntities[id].name || '';
   }
 }
 
@@ -755,6 +759,7 @@ function addOrUpdateLocation(loc){
   clients[id].located = isReal;
   if (!ent){
     ent = viewer.entities.add({
+      name: loc.client_name,
       position: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat),
       point: {pixelSize:10, color: col},
       label: {text: loc.client_name, font:'14px sans-serif', verticalOrigin: Cesium.VerticalOrigin.BOTTOM},
@@ -767,6 +772,7 @@ function addOrUpdateLocation(loc){
     ent.properties.name = loc.client_name;
     ent.point.color = col;
     ent.properties.real = isReal;
+    ent.name = loc.client_name;
   }
   if (viewState === 'new' && isReal && id !== client_id && (!wasReal)) {
     viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 1000000)});
