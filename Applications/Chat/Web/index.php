@@ -14,14 +14,17 @@ include __DIR__ . '/../../../config.php';
       --bg:#0f172a; --panel:#1e293b; --muted:#334155; --muted-2:#475569;
       --accent:#0ea5e9; --text:#f8fafc; --sub:#94a3b8;
       --ok:#22c55e; --busy:#f97316; --away:#ef4444; --warn:#facc15; --invisible:#6b7280;
+      --nav-h:0px;
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
-    #chatWrapper{position:fixed;left:0;right:0;bottom:0;top:auto;display:none;height:40vh;max-height:400px;overflow:hidden;z-index:10}
-    #chatWrapper.active{display:flex}
+    #chatWrapper{position:fixed;left:0;right:0;bottom:calc(70px + env(safe-area-inset-bottom));top:auto;display:flex;height:40vh;max-height:400px;overflow:hidden;z-index:10;background:rgba(15,23,42,.7);backdrop-filter:blur(4px);padding-bottom:env(safe-area-inset-bottom)}
+    #usersPanel{position:fixed;top:calc(44px + env(safe-area-inset-top));right:0;bottom:env(safe-area-inset-bottom);display:none;width:clamp(200px,20vw,340px);background:transparent;flex-direction:column;overflow-y:auto;z-index:20;padding:1rem;padding-bottom:calc(1rem + env(safe-area-inset-bottom))}
+    #usersPanel.active{display:flex}
     .cesium-viewer-toolbar{z-index:30}
     .cesium-toolbar-button{margin:2px}
+    .cesium-viewer .cesium-widget-credits{display:none!important}
     .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
     .sidebar details{display:flex;flex-direction:column;gap:.75rem;padding:1rem}
     .sidebar summary{list-style:none;cursor:pointer}
@@ -39,7 +42,9 @@ include __DIR__ . '/../../../config.php';
     .btn{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:.4rem .65rem;cursor:pointer}
     .btn.secondary{background:var(--muted);color:#e5e7eb}
     .chat{flex:1;display:flex;flex-direction:column}
-    .tabs{display:flex;align-items:center;gap:.5rem;background:var(--panel);padding:.5rem 1rem;flex-wrap:wrap}
+    .tabs{display:flex;align-items:center;gap:.5rem;background:var(--panel);padding:.5rem 1rem}
+    #tabs{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+    .tab-icons{display:flex;align-items:center;gap:.5rem;margin-right:.5rem}
     .tab{background:var(--muted);border-radius:6px;padding:.28rem .55rem;display:flex;align-items:center;gap:.4rem;cursor:pointer}
     .tab.active{background:var(--accent);color:#fff}
     .tab.blink{animation:blink 1s infinite}
@@ -47,18 +52,22 @@ include __DIR__ . '/../../../config.php';
     .tab .actions{display:flex;align-items:center;gap:.25rem}
     .icon-btn{background:transparent;border:none;color:inherit;cursor:pointer;font-size:14px;opacity:.9}
     .icon-btn:hover{opacity:1}
-    .messages{flex:1;overflow-y:auto;padding:1rem;background:#0b1220}
+    .messages{flex:1;overflow-y:auto;padding:1rem;background:rgba(11,18,32,.6);padding-bottom:calc(70px + env(safe-area-inset-bottom))}
     .msg{margin-bottom:12px;max-width:72%}
     .msg.me{margin-left:auto;text-align:right}
     .msg small{display:block;color:var(--sub);font-size:.72rem;margin-bottom:2px}
-    .input{display:flex;gap:.5rem;background:var(--panel);padding:.6rem}
+    .input{position:fixed;left:0;right:0;bottom:0;display:flex;gap:.5rem;background:rgba(30,41,59,.6);padding:.6rem;padding-bottom:calc(.6rem + env(safe-area-inset-bottom));z-index:30;width:85%;}
     .input textarea{flex:1;min-height:42px;max-height:160px;resize:vertical;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.6rem;border-radius:8px}
     .input button{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:.55rem 1rem;cursor:pointer}
     .dot{width:10px;height:10px;border-radius:50%}
     .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)} .dot.invisible{background:var(--invisible)}
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
-    .mobile-nav{display:none}
+    #toastContainer{position:fixed;top:calc(1rem + env(safe-area-inset-top));left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;align-items:center}
+    .toast{background:rgba(30,41,59,.9);color:var(--text);padding:.5rem 1rem;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,.3);opacity:1;transition:opacity .5s}
+    .toast.hide{opacity:0}
+    #chatWrapper.hidden{display:none}
+    #chatToggle{position:fixed;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom));background:var(--panel);color:var(--text);border:none;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 4px rgba(0,0,0,.4);z-index:25;cursor:pointer}
     .profile-popup{position:absolute;display:none;flex-direction:column;gap:.25rem;padding:.5rem;background:var(--panel);border:1px solid var(--muted-2);border-radius:8px;z-index:40;min-width:160px}
     .profile-popup.active{display:flex}
     .profile-popup .title{font-weight:700;margin-bottom:.25rem}
@@ -74,14 +83,13 @@ include __DIR__ . '/../../../config.php';
     #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
     #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
     @media (max-width:768px){
-      #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none}
-      .chat{order:1;width:100%;margin-bottom:60px}
+      #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none;bottom:calc(70px + env(safe-area-inset-bottom))}
+      .chat{order:1;width:100%}
       .sidebar{position:absolute;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
-      .sidebar.users{left:auto;right:0;transform:translateX(100%)}
       .sidebar.open{transform:translateX(0)}
-      .mobile-nav{display:flex;justify-content:space-around;gap:.5rem;background:var(--panel);position:absolute;bottom:0;left:0;right:0;z-index:25;padding:.5rem}
-      .mobile-nav button{flex:1;border:none;background:var(--muted);color:var(--text);border-radius:6px;padding:.5rem}
       .cesium-viewer-toolbar{display:flex;flex-wrap:wrap;gap:.4rem}
+      #usersPanel{top:calc(44px + env(safe-area-inset-top));bottom:env(safe-area-inset-bottom);width:100%;max-width:none;padding-bottom:calc(1rem + env(safe-area-inset-bottom));transform:translateX(100%);transition:transform .3s}
+      #usersPanel.active{transform:translateX(0)}
     }
   </style>
 </head>
@@ -106,18 +114,25 @@ include __DIR__ . '/../../../config.php';
 
   <!-- Chat -->
   <main class="chat">
-    <div class="tabs" id="tabs"></div>
-    <div class="messages" id="messages"></div>
-    <div class="input">
-      <textarea id="input" placeholder="Écris un message..."></textarea>
-      <button onclick="onSubmit()">Envoyer</button>
+    <div class="tabs">
+      <div class="tab-icons">
+        <button id="roomsBtn" class="icon-btn" onclick="toggleRooms()" ontouchstart="toggleRooms()" title="Salles">📂</button>
+      </div>
+      <div id="tabs"></div>
     </div>
+    <div class="messages" id="messages"></div>
   </main>
+  </div>
+  
+  <div class="input">
+    <textarea id="input" placeholder="Écris un message..."></textarea>
+    <button onclick="onSubmit()">Envoyer</button>
+  </div> 
+
+  <button id="chatToggle" class="chat-toggle" onclick="toggleChat()" title="Chat">⬇️</button>
 
   <!-- Utilisateurs -->
-  <aside class="sidebar users">
-    <details open>
-      <summary class="h2">👥 Utilisateurs</summary>
+  <aside id="usersPanel" class="sidebar users">
       <div id="users" class="list"></div>
       <select id="statusSelect" class="select" onchange="changeStatus()">
         <option value="online">🟢 En ligne</option>
@@ -125,13 +140,7 @@ include __DIR__ . '/../../../config.php';
         <option value="busy">🟠 Occupé</option>
         <option value="invisible">⚫ Invisible</option>
       </select>
-      </details>
   </aside>
-  <div class="mobile-nav">
-    <button onclick="toggleRooms()">Salles</button>
-    <button onclick="toggleUsers()">Utilisateurs</button>
-  </div>
-  </div>
   <div id="profilePopup" class="profile-popup"></div>
   <div id="callOverlay">
     <video id="localVideo" autoplay muted playsinline></video>
@@ -145,6 +154,7 @@ include __DIR__ . '/../../../config.php';
       <button class="btn" onclick="hangup()">Raccrocher</button>
     </div>
   </div>
+  <div id="toastContainer"></div>
 
 <script>
 /* =========================
@@ -181,12 +191,14 @@ let notifState = (typeof Notification !== 'undefined' && Notification.permission
     locationState = 'none',
     viewState = 'new';
 const mutedUsers = new Set();
+const locationShared = {}; // track which users already triggered a location toast
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
 let micEnabled = true, videoEnabled = true;
 
 function showCallError(msg){
   document.getElementById('callError').textContent = msg || '';
+  if (msg) showToast('Erreur: ' + msg);
 }
 
 function mediaErrorMessage(err){
@@ -236,37 +248,50 @@ const statusColors = {
 const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
 const profilePopup = document.getElementById('profilePopup');
+const usersPanel = document.getElementById('usersPanel');
+const toastContainer = document.getElementById('toastContainer');
+const chatToggle = document.getElementById('chatToggle');
+chatToggle.textContent = '⬇️';
+function showToast(msg, onClick){
+  const div = document.createElement('div');
+  div.className = 'toast';
+  div.textContent = msg;
+  if (onClick){
+    div.style.cursor = 'pointer';
+    div.addEventListener('click', ()=>{ onClick(); div.remove(); });
+  }
+  toastContainer.appendChild(div);
+  setTimeout(()=>div.classList.add('hide'),4000);
+  setTimeout(()=>div.remove(),4500);
+}
 function toggleRooms(){
   document.querySelector('.sidebar.rooms').classList.toggle('open');
-  document.querySelector('.sidebar.users').classList.remove('open');
+  usersPanel.classList.remove('active');
 }
-function toggleUsers(){
-  document.querySelector('.sidebar.users').classList.toggle('open');
-  document.querySelector('.sidebar.rooms').classList.remove('open');
+function toggleChat(){
+  chatWrapper.classList.toggle('hidden');
+  chatToggle.textContent = chatWrapper.classList.contains('hidden') ? '💬' : '⬇️';
 }
 // place Cesium toolbar above chat overlay so buttons stay visible
 toolbar.style.zIndex = 30;
-const chatBtn = document.createElement('button');
-chatBtn.className = 'cesium-button cesium-toolbar-button';
-function updateChatBtn(){
-  const uname = localStorage.getItem('chatName') || 'Invité';
+const usersBtn = document.createElement('button');
+usersBtn.className = 'cesium-button cesium-toolbar-button';
+function updateUsersBtn(){
   const count = Object.keys(clients).length;
-  chatBtn.textContent = `👥 (${count})`;
+  usersBtn.textContent = `👥 (${count})`;
 }
-updateChatBtn();
-chatBtn.onclick = () => {
+updateUsersBtn();
+usersBtn.onclick = () => {
   if (!localStorage.getItem('chatName')) {
     const newName = prompt('Choisis un pseudo') || 'Invité';
     name = newName;
     localStorage.setItem('chatName', name);
-    updateChatBtn();
     ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
   }
-  chatWrapper.classList.toggle('active');
-  if (chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink');
-  document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
+  usersPanel.classList.toggle('active');
+  document.querySelector('.sidebar.rooms').classList.remove('open');
 };
-toolbar.appendChild(chatBtn);
+toolbar.appendChild(usersBtn);
 const notifBtn = document.createElement('button');
 notifBtn.className = 'cesium-button cesium-toolbar-button';
 function updateNotifBtn(){
@@ -298,8 +323,8 @@ function updateLocBtn(){
 updateLocBtn();
 locBtn.onclick = () => {
   locationState = locationState === 'all' ? 'friends' : locationState === 'friends' ? 'none' : 'all';
-  if (locationState === 'none') stopLocation();
-  else shareLocation();
+  if (locationState === 'none') { stopLocation(); }
+  else { shareLocation(); showToast('Localisation activée'); }
   updateLocBtn();
 };
 toolbar.appendChild(locBtn);
@@ -336,22 +361,9 @@ toolbar.appendChild(viewBtn);
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
   homeBtn.addEventListener('click', () => {
-    chatWrapper.classList.remove('active');
-    document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
-  });
-}
-
-if (window.matchMedia('(max-width:768px)').matches) {
-  const usersBtn = document.createElement('button');
-  usersBtn.className = 'cesium-button cesium-toolbar-button';
-  usersBtn.textContent = '📋';
-  usersBtn.title = 'Utilisateurs connectés';
-  usersBtn.onclick = () => {
-    chatWrapper.classList.add('active');
-    document.querySelector('.sidebar.users').classList.add('open');
     document.querySelector('.sidebar.rooms').classList.remove('open');
-  };
-  toolbar.appendChild(usersBtn);
+    usersPanel.classList.remove('active');
+  });
 }
 
 const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
@@ -397,6 +409,26 @@ function hideProfilePopup(){
 function followGps(id){
   if (locationEntities[id]) {
     viewer.trackedEntity = locationEntities[id];
+  }
+}
+
+function focusUser(id, uname){
+  showToast('Centrage sur ' + uname);
+  const ent = locationEntities[id];
+  usersPanel.classList.remove('active');
+  if (ent){
+    const pos = ent.position.getValue(Cesium.JulianDate.now());
+    const carto = Cesium.Cartographic.fromCartesian(pos);
+    viewer.trackedEntity = null;
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, 5000),
+      complete: () => {
+        const win = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, pos);
+        if (win) showProfilePopup(id, uname, win);
+      }
+    });
+  } else {
+    showProfilePopup(id, uname, {x:window.innerWidth/2, y:window.innerHeight/2});
   }
 }
 
@@ -735,6 +767,7 @@ function shareLocation(){
 
   const errorHandler = err => {
     console.warn('Erreur de localisation :', err.message);
+    showToast('Erreur localisation: ' + err.message);
   };
 
   // iOS Safari requires getCurrentPosition to be called directly from a user gesture
@@ -751,6 +784,7 @@ function stopLocation(){
   }
   if (ws) ws.send(JSON.stringify({type:'location_remove'}));
   removeLocation(client_id);
+  showToast('Localisation désactivée');
 }
 
 /* =========================
@@ -778,13 +812,15 @@ function connect(){
 
 
   ws.onopen = () => {
+    showToast('Connecté au chat');
     if (!name) name = localStorage.getItem('chatName') || 'Invité';
     // login première room : soit "general", soit celle de l'URL si présente
     loginRoom([...rooms.keys()][0]);
   };
 
   ws.onmessage = onmessage;
-  ws.onclose   = () => setTimeout(connect, 1500);
+  ws.onerror   = () => showToast('Erreur de connexion');
+  ws.onclose   = () => { showToast('Déconnecté du chat'); setTimeout(connect, 1500); };
 }
 
 function loginRoom(roomId){
@@ -811,7 +847,7 @@ function chooseName(){
     const newName = prompt('Votre pseudo ?') || 'Invité';
     name = newName;
     localStorage.setItem('chatName', name);
-    updateChatBtn();
+    updateUsersBtn();
     ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
   }
 }
@@ -854,6 +890,7 @@ function onmessage(e){
         // Sécurité : merge si pas de client_list
         clients[data.client_id] = {name: data.client_name, status: data.status || 'online'};
         renderUsers();
+        if (data.client_id !== client_id) showToast(`${data.client_name} s'est connecté`);
       }
       break;
     }
@@ -878,7 +915,7 @@ function onmessage(e){
       if (client_id && data.client_id == client_id) {
         name = data.client_name;
         localStorage.setItem('chatName', name);
-        updateChatBtn();
+        updateUsersBtn();
         if (locationEntities[client_id]) {
           locationEntities[client_id].label.text = name;
           locationEntities[client_id].properties.name = name;
@@ -890,16 +927,33 @@ function onmessage(e){
 
     case 'locations': {
       (data.locations || []).forEach(l => addOrUpdateLocation(l));
+      renderUsers();
       break;
     }
 
     case 'location': {
       addOrUpdateLocation(data);
+      renderUsers();
+      if (data.client_id !== client_id) {
+        const uname = clients[data.client_id]?.name || data.client_name || 'Utilisateur';
+        if (!locationShared[data.client_id]) {
+          showToast(`${uname} a partagé sa localisation`);
+          locationShared[data.client_id] = true;
+        }
+      }
       break;
     }
 
     case 'location_remove': {
       removeLocation(data.client_id);
+      renderUsers();
+      if (data.client_id !== client_id) {
+        const uname = clients[data.client_id]?.name || 'Utilisateur';
+        if (locationShared[data.client_id]) {
+          showToast(`${uname} a retiré sa localisation`);
+          locationShared[data.client_id] = false;
+        }
+      }
       break;
     }
 
@@ -948,28 +1002,44 @@ function onmessage(e){
     case 'say': {
       // Stocke ET rafraîchit si la conversation visible est concernée
       const key = storeMessage(data);
-      if (currentKey === key && chatWrapper.classList.contains('active')) {
+      if (currentKey === key) {
         renderMessages();
       } else {
         blinkTab(key);
-        chatBtn.classList.add('blink');
       }
-      if (data.dm && notificationsAllowed && String(data.from_client_id) !== String(client_id) && shouldNotify(data.from_client_id)) {
-        new Notification('Message privé de ' + (data.from_client_name || 'Utilisateur'), {
-          body: data.content || ''
+      if (String(data.from_client_id) !== String(client_id)) {
+        const uname = data.from_client_name || clients[data.from_client_id]?.name || 'Utilisateur';
+        showToast(`${uname}: ${data.content}`, ()=>{
+          currentKey = key;
+          renderTabs();
+          renderMessages();
+          clearBlink(key);
         });
+        if (data.dm && notificationsAllowed && shouldNotify(data.from_client_id)) {
+          new Notification('Message privé de ' + (data.from_client_name || 'Utilisateur'), {
+            body: data.content || ''
+          }).onclick = ()=>{
+            currentKey = key;
+            renderTabs();
+            renderMessages();
+            clearBlink(key);
+            window.focus();
+          };
+        }
       }
       break;
     }
 
     case 'logout': {
+      const uname = clients[data.from_client_id]?.name || 'Utilisateur';
       delete clients[data.from_client_id];
       renderUsers();
+      delete locationShared[data.from_client_id];
+      showToast(`${uname} s'est déconnecté`);
       break;
     }
     case 'wizz': {
       alert('Wizz de ' + (clients[data.from]?.name || 'Utilisateur') + '!');
-      chatBtn.classList.add('blink');
       break;
     }
     case 'call_invite': {
@@ -1060,7 +1130,7 @@ function renderTabs(){
       div.appendChild(actions);
     }
 
-    div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); if(chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink'); };
+    div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); };
     div.id = 'tab_' + k;
     t.appendChild(div);
   });
@@ -1155,11 +1225,11 @@ function renderUsers(){
     div.appendChild(label);
 
     if (id == client_id) div.onclick = chooseName;
-    else div.onclick = () => openDM(id, info.name || 'Invité');
+    else div.onclick = () => focusUser(id, info.name || 'Invité');
 
     u.appendChild(div);
   });
-  updateChatBtn();
+  updateUsersBtn();
 }
 
 /* =========================
@@ -1208,10 +1278,8 @@ function openDM(id, username){
   if (!messages[key]) messages[key] = [];
   tabs[key] = 'DM avec ' + username;
   currentKey = key;
-  chatWrapper.classList.add('active');
   renderTabs();
   renderMessages();
-  chatBtn.classList.remove('blink');
 }
 
 function onSubmit(){
