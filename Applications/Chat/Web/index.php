@@ -78,11 +78,11 @@ include __DIR__ . '/../../../config.php';
     #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
     #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
     @media (max-width:768px){
-      #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none}
-      .chat{order:1;width:100%;padding-bottom:60px}
+      #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none;bottom:56px}
+      .chat{order:1;width:100%}
       .sidebar{position:absolute;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
       .sidebar.open{transform:translateX(0)}
-      .mobile-nav{display:flex;justify-content:space-around;gap:.5rem;background:var(--panel);position:absolute;bottom:0;left:0;right:0;z-index:25;padding:.5rem}
+      .mobile-nav{display:flex;justify-content:space-around;gap:.5rem;background:var(--panel);position:fixed;bottom:0;left:0;right:0;z-index:25;padding:.5rem;height:56px}
       .mobile-nav button{flex:1;border:none;background:var(--muted);color:var(--text);border-radius:6px;padding:.5rem}
       .cesium-viewer-toolbar{display:flex;flex-wrap:wrap;gap:.4rem}
       #usersPanel{width:80%;max-width:320px;transform:translateX(100%);transition:transform .3s}
@@ -118,10 +118,10 @@ include __DIR__ . '/../../../config.php';
       <button onclick="onSubmit()">Envoyer</button>
     </div>
   </main>
+  </div>
   <div class="mobile-nav">
     <button onclick="toggleRooms()">Salles</button>
     <button onclick="toggleUsers()">Utilisateurs</button>
-  </div>
   </div>
   <!-- Utilisateurs -->
   <aside id="usersPanel" class="sidebar users">
