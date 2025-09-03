@@ -19,11 +19,12 @@ include __DIR__ . '/../../../config.php';
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
-    #chatWrapper{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom));top:auto;display:flex;height:40vh;max-height:400px;overflow:hidden;z-index:10;background:rgba(15,23,42,.7);backdrop-filter:blur(4px);padding-bottom:env(safe-area-inset-bottom)}
+    #chatWrapper{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + 70px + env(safe-area-inset-bottom));top:auto;display:flex;height:40vh;max-height:400px;overflow:hidden;z-index:10;background:rgba(15,23,42,.7);backdrop-filter:blur(4px);padding-bottom:env(safe-area-inset-bottom)}
     #usersPanel{position:fixed;top:calc(44px + env(safe-area-inset-top));right:0;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom));display:none;width:clamp(200px,20vw,340px);background:transparent;flex-direction:column;overflow-y:auto;z-index:20;padding:1rem;padding-bottom:calc(1rem + env(safe-area-inset-bottom))}
     #usersPanel.active{display:flex}
     .cesium-viewer-toolbar{z-index:30}
     .cesium-toolbar-button{margin:2px}
+    .cesium-viewer .cesium-widget-credits{display:none!important}
     .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
     .sidebar details{display:flex;flex-direction:column;gap:.75rem;padding:1rem}
     .sidebar summary{list-style:none;cursor:pointer}
@@ -51,11 +52,11 @@ include __DIR__ . '/../../../config.php';
     .tab .actions{display:flex;align-items:center;gap:.25rem}
     .icon-btn{background:transparent;border:none;color:inherit;cursor:pointer;font-size:14px;opacity:.9}
     .icon-btn:hover{opacity:1}
-    .messages{flex:1;overflow-y:auto;padding:1rem;background:rgba(11,18,32,.6)}
+    .messages{flex:1;overflow-y:auto;padding:1rem;background:rgba(11,18,32,.6);padding-bottom:calc(70px + env(safe-area-inset-bottom))}
     .msg{margin-bottom:12px;max-width:72%}
     .msg.me{margin-left:auto;text-align:right}
     .msg small{display:block;color:var(--sub);font-size:.72rem;margin-bottom:2px}
-    .input{display:flex;gap:.5rem;background:rgba(30,41,59,.6);padding:.6rem}
+    .input{position:fixed;left:0;right:0;bottom:0;display:flex;gap:.5rem;background:rgba(30,41,59,.6);padding:.6rem;padding-bottom:calc(.6rem + env(safe-area-inset-bottom));z-index:30}
     .input textarea{flex:1;min-height:42px;max-height:160px;resize:vertical;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.6rem;border-radius:8px}
     .input button{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:.55rem 1rem;cursor:pointer}
     .dot{width:10px;height:10px;border-radius:50%}
@@ -82,7 +83,7 @@ include __DIR__ . '/../../../config.php';
     #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
     #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
     @media (max-width:768px){
-      #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom))}
+      #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none;bottom:calc(var(--nav-h) + 70px + env(safe-area-inset-bottom))}
       .chat{order:1;width:100%}
       .sidebar{position:absolute;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
       .sidebar.open{transform:translateX(0)}
