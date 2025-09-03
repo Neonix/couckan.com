@@ -60,7 +60,7 @@ include __DIR__ . '/../../../config.php';
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
     .mobile-nav{display:none}
-    #toastContainer{position:fixed;top:1rem;right:1rem;display:flex;flex-direction:column;gap:.5rem;z-index:100}
+    #toastContainer{position:fixed;top:1rem;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;align-items:center}
     .toast{background:rgba(30,41,59,.9);color:var(--text);padding:.5rem 1rem;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,.3);opacity:1;transition:opacity .5s}
     .toast.hide{opacity:0}
     .profile-popup{position:absolute;display:none;flex-direction:column;gap:.25rem;padding:.5rem;background:var(--panel);border:1px solid var(--muted-2);border-radius:8px;z-index:40;min-width:160px}
@@ -183,6 +183,7 @@ let notifState = (typeof Notification !== 'undefined' && Notification.permission
     locationState = 'none',
     viewState = 'new';
 const mutedUsers = new Set();
+const locationShared = {}; // track which users already triggered a location toast
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
 let micEnabled = true, videoEnabled = true;
@@ -241,10 +242,14 @@ const toolbar = document.querySelector('.cesium-viewer-toolbar');
 const profilePopup = document.getElementById('profilePopup');
 const usersPanel = document.getElementById('usersPanel');
 const toastContainer = document.getElementById('toastContainer');
-function showToast(msg){
+function showToast(msg, onClick){
   const div = document.createElement('div');
   div.className = 'toast';
   div.textContent = msg;
+  if (onClick){
+    div.style.cursor = 'pointer';
+    div.addEventListener('click', ()=>{ onClick(); div.remove(); });
+  }
   toastContainer.appendChild(div);
   setTimeout(()=>div.classList.add('hide'),4000);
   setTimeout(()=>div.remove(),4500);
@@ -921,7 +926,10 @@ function onmessage(e){
       renderUsers();
       if (data.client_id !== client_id) {
         const uname = clients[data.client_id]?.name || data.client_name || 'Utilisateur';
-        showToast(`${uname} a partagé sa localisation`);
+        if (!locationShared[data.client_id]) {
+          showToast(`${uname} a partagé sa localisation`);
+          locationShared[data.client_id] = true;
+        }
       }
       break;
     }
@@ -931,7 +939,10 @@ function onmessage(e){
       renderUsers();
       if (data.client_id !== client_id) {
         const uname = clients[data.client_id]?.name || 'Utilisateur';
-        showToast(`${uname} a retiré sa localisation`);
+        if (locationShared[data.client_id]) {
+          showToast(`${uname} a retiré sa localisation`);
+          locationShared[data.client_id] = false;
+        }
       }
       break;
     }
@@ -986,10 +997,25 @@ function onmessage(e){
       } else {
         blinkTab(key);
       }
-      if (data.dm && notificationsAllowed && String(data.from_client_id) !== String(client_id) && shouldNotify(data.from_client_id)) {
-        new Notification('Message privé de ' + (data.from_client_name || 'Utilisateur'), {
-          body: data.content || ''
+      if (String(data.from_client_id) !== String(client_id)) {
+        const uname = data.from_client_name || clients[data.from_client_id]?.name || 'Utilisateur';
+        showToast(`${uname}: ${data.content}`, ()=>{
+          currentKey = key;
+          renderTabs();
+          renderMessages();
+          clearBlink(key);
         });
+        if (data.dm && notificationsAllowed && shouldNotify(data.from_client_id)) {
+          new Notification('Message privé de ' + (data.from_client_name || 'Utilisateur'), {
+            body: data.content || ''
+          }).onclick = ()=>{
+            currentKey = key;
+            renderTabs();
+            renderMessages();
+            clearBlink(key);
+            window.focus();
+          };
+        }
       }
       break;
     }
@@ -998,6 +1024,7 @@ function onmessage(e){
       const uname = clients[data.from_client_id]?.name || 'Utilisateur';
       delete clients[data.from_client_id];
       renderUsers();
+      delete locationShared[data.from_client_id];
       showToast(`${uname} s'est déconnecté`);
       break;
     }
