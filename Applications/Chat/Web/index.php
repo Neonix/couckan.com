@@ -179,7 +179,7 @@ let ws, name, client_id = storedId, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false;
 let notifState = (typeof Notification !== 'undefined' && Notification.permission === 'granted') ? 'all' : 'none',
     locationState = 'none',
-    viewState = 'home';
+    viewState = 'new';
 const mutedUsers = new Set();
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
