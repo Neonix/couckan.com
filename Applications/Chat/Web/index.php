@@ -40,7 +40,9 @@ include __DIR__ . '/../../../config.php';
     .btn{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:.4rem .65rem;cursor:pointer}
     .btn.secondary{background:var(--muted);color:#e5e7eb}
     .chat{flex:1;display:flex;flex-direction:column}
-    .tabs{display:flex;align-items:center;gap:.5rem;background:var(--panel);padding:.5rem 1rem;flex-wrap:wrap}
+    .tabs{display:flex;align-items:center;gap:.5rem;background:var(--panel);padding:.5rem 1rem}
+    #tabs{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+    .tab-icons{display:flex;align-items:center;gap:.5rem;margin-right:.5rem}
     .tab{background:var(--muted);border-radius:6px;padding:.28rem .55rem;display:flex;align-items:center;gap:.4rem;cursor:pointer}
     .tab.active{background:var(--accent);color:#fff}
     .tab.blink{animation:blink 1s infinite}
@@ -59,7 +61,6 @@ include __DIR__ . '/../../../config.php';
     .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)} .dot.invisible{background:var(--invisible)}
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
-    .mobile-nav{display:none}
     #toastContainer{position:fixed;top:1rem;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;align-items:center}
     .toast{background:rgba(30,41,59,.9);color:var(--text);padding:.5rem 1rem;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,.3);opacity:1;transition:opacity .5s}
     .toast.hide{opacity:0}
@@ -78,14 +79,12 @@ include __DIR__ . '/../../../config.php';
     #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
     #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
     @media (max-width:768px){
-      #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none;bottom:calc(56px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom)}
+      #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none;bottom:env(safe-area-inset-bottom)}
       .chat{order:1;width:100%}
       .sidebar{position:absolute;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
       .sidebar.open{transform:translateX(0)}
-      .mobile-nav{display:flex;justify-content:space-around;gap:.5rem;background:var(--panel);position:fixed;bottom:0;left:0;right:0;z-index:25;padding:.5rem;height:calc(56px + env(safe-area-inset-bottom));padding-bottom:calc(.5rem + env(safe-area-inset-bottom))}
-      .mobile-nav button{flex:1;border:none;background:var(--muted);color:var(--text);border-radius:6px;padding:.5rem}
       .cesium-viewer-toolbar{display:flex;flex-wrap:wrap;gap:.4rem}
-      #usersPanel{top:0;bottom:calc(56px + env(safe-area-inset-bottom));width:80%;max-width:320px;padding-bottom:calc(1rem + env(safe-area-inset-bottom));transform:translateX(100%);transition:transform .3s}
+      #usersPanel{top:44px;bottom:env(safe-area-inset-bottom);width:100%;max-width:none;padding-bottom:calc(1rem + env(safe-area-inset-bottom));transform:translateX(100%);transition:transform .3s}
       #usersPanel.active{transform:translateX(0)}
     }
   </style>
@@ -111,17 +110,19 @@ include __DIR__ . '/../../../config.php';
 
   <!-- Chat -->
   <main class="chat">
-    <div class="tabs" id="tabs"></div>
+    <div class="tabs">
+      <div class="tab-icons">
+        <button class="icon-btn" onclick="toggleRooms()" title="Salles">📂</button>
+        <button class="icon-btn" onclick="toggleUsers()" title="Utilisateurs">👥</button>
+      </div>
+      <div id="tabs"></div>
+    </div>
     <div class="messages" id="messages"></div>
     <div class="input">
       <textarea id="input" placeholder="Écris un message..."></textarea>
       <button onclick="onSubmit()">Envoyer</button>
     </div>
   </main>
-  </div>
-  <div class="mobile-nav">
-    <button onclick="toggleRooms()">Salles</button>
-    <button onclick="toggleUsers()">Utilisateurs</button>
   </div>
   <!-- Utilisateurs -->
   <aside id="usersPanel" class="sidebar users">
