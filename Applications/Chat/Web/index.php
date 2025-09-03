@@ -238,7 +238,7 @@ function showToast(msg, onClick){
   div.textContent = msg;
   if (onClick){
     div.style.cursor = 'pointer';
-    div.addEventListener('click', ()=>{ onClick(); div.remove(); });
+    div.addEventListener('click', e=>{ e.stopPropagation(); onClick(); div.remove(); });
   }
   toastContainer.appendChild(div);
   setTimeout(()=>div.classList.add('hide'),4000);
@@ -354,20 +354,19 @@ if (homeBtn) {
 }
 
 document.addEventListener('click', (e) => {
-  const t = e.target;
-  if (!chatWrapper.classList.contains('hidden') &&
-      !t.closest('#chatWrapper') &&
-      !t.closest('#chatToggle')) {
+  const path = e.composedPath();
+  const insideChat = path.includes(chatWrapper);
+  const onToggle = path.includes(chatToggle);
+  if (!chatWrapper.classList.contains('hidden') && !insideChat && !onToggle) {
     chatWrapper.classList.add('hidden');
     chatToggle.textContent = '💬';
   }
-  if (usersPanel.classList.contains('active') &&
-      !t.closest('#usersPanel') &&
-      !usersBtn.contains(t)) {
+  const insideUsers = path.includes(usersPanel);
+  const onUsersBtn = path.includes(usersBtn);
+  if (usersPanel.classList.contains('active') && !insideUsers && !onUsersBtn) {
     usersPanel.classList.remove('active');
   }
-  if (profilePopup.classList.contains('active') &&
-      !t.closest('#profilePopup')) {
+  if (profilePopup.classList.contains('active') && !path.includes(profilePopup)) {
     hideProfilePopup();
   }
 });
