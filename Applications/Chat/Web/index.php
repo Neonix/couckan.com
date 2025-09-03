@@ -1170,6 +1170,17 @@ function closeRoom(roomId){
   const meta = rooms.get(roomId);
   if (!meta || !client_id || meta.creator_id != client_id) return;
   ws.send(JSON.stringify({type:'close_room', room_id:roomId, creator_id:client_id}));
+
+  // remove room locally so the tab closes immediately
+  const key = 'room_' + roomId;
+  delete tabs[key];
+  delete messages[key];
+  rooms.delete(roomId);
+  if (currentKey === key) {
+    currentKey = 'room_general';
+    renderMessages();
+  }
+  renderTabs();
 }
 
 function closeDM(id){
