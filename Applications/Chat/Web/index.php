@@ -56,7 +56,7 @@ include __DIR__ . '/../../../config.php';
     .msg{margin-bottom:12px;max-width:72%}
     .msg.me{margin-left:auto;text-align:right}
     .msg small{display:block;color:var(--sub);font-size:.72rem;margin-bottom:2px}
-    .input{position:fixed;left:0;right:0;bottom:0;display:flex;gap:.5rem;background:rgba(30,41,59,.6);padding:.6rem;padding-bottom:calc(.6rem + env(safe-area-inset-bottom));z-index:30}
+    .input{position:fixed;left:0;right:0;bottom:0;display:flex;gap:.5rem;background:rgba(30,41,59,.6);padding:.6rem;padding-bottom:calc(.6rem + env(safe-area-inset-bottom));z-index:30;width:85%;}
     .input textarea{flex:1;min-height:42px;max-height:160px;resize:vertical;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.6rem;border-radius:8px}
     .input button{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:.55rem 1rem;cursor:pointer}
     .dot{width:10px;height:10px;border-radius:50%}
@@ -121,13 +121,16 @@ include __DIR__ . '/../../../config.php';
       <div id="tabs"></div>
     </div>
     <div class="messages" id="messages"></div>
-    <div class="input">
-      <textarea id="input" placeholder="Écris un message..."></textarea>
-      <button onclick="onSubmit()">Envoyer</button>
-    </div>
   </main>
   </div>
+  
+  <div class="input">
+    <textarea id="input" placeholder="Écris un message..."></textarea>
+    <button onclick="onSubmit()">Envoyer</button>
+  </div> 
+
   <button id="chatToggle" class="chat-toggle" onclick="toggleChat()" title="Chat">⬇️</button>
+
   <!-- Utilisateurs -->
   <aside id="usersPanel" class="sidebar users">
       <div id="users" class="list"></div>
