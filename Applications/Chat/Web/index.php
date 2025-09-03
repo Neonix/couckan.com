@@ -82,6 +82,9 @@ include __DIR__ . '/../../../config.php';
     #callOverlay .error{color:#f87171;margin-top:.5rem;text-align:center}
     #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
     #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
+    #startOverlay{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;gap:2rem;background:rgba(0,0,0,.5);z-index:200}
+    #startOverlay .choice{background:var(--panel);color:var(--text);padding:2rem 3rem;border-radius:12px;text-align:center;font-size:1.5rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:.5rem}
+    #startOverlay .choice span{font-size:2.5rem}
     @media (max-width:768px){
       #chatWrapper{width:95%;right:2.5%;max-height:60vh}
       .sidebar{position:absolute;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
@@ -94,6 +97,10 @@ include __DIR__ . '/../../../config.php';
 </head>
 <body>
   <div id="cesiumContainer"></div>
+  <div id="startOverlay">
+    <div class="choice" id="watchBtn"><span>👁️</span>Regarder</div>
+    <div class="choice" id="playBtn"><span>📍</span>Jouer</div>
+  </div>
   <div id="chatWrapper">
   <!-- Chat -->
   <main class="chat">
@@ -346,6 +353,19 @@ viewBtn.onclick = () => {
   updateViewBtn();
 };
 toolbar.appendChild(viewBtn);
+
+const startOverlay = document.getElementById('startOverlay');
+document.getElementById('watchBtn').onclick = () => {
+  startOverlay.style.display = 'none';
+  viewer.trackedEntity = null;
+  viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(0,0,1000000)});
+};
+document.getElementById('playBtn').onclick = () => {
+  startOverlay.style.display = 'none';
+  locationState = 'all';
+  shareLocation();
+  updateLocBtn();
+};
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
   homeBtn.addEventListener('click', () => {
