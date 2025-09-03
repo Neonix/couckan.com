@@ -250,7 +250,15 @@ function toggleChat(){
   chatToggle.textContent = hidden ? '💬' : '⬇️';
   if (!hidden) {
     chatToggle.classList.remove('blink');
-    clearBlink(currentKey);
+    if (notifKey) {
+      currentKey = notifKey;
+      renderTabs();
+      renderMessages();
+      clearBlink(notifKey);
+      notifKey = null;
+    } else {
+      clearBlink(currentKey);
+    }
   }
 }
 // place Cesium toolbar above chat overlay so buttons stay visible
@@ -346,19 +354,20 @@ if (homeBtn) {
 }
 
 document.addEventListener('click', (e) => {
+  const t = e.target;
   if (!chatWrapper.classList.contains('hidden') &&
-      !chatWrapper.contains(e.target) &&
-      !chatToggle.contains(e.target)) {
+      !t.closest('#chatWrapper') &&
+      !t.closest('#chatToggle')) {
     chatWrapper.classList.add('hidden');
     chatToggle.textContent = '💬';
   }
   if (usersPanel.classList.contains('active') &&
-      !usersPanel.contains(e.target) &&
-      !usersBtn.contains(e.target)) {
+      !t.closest('#usersPanel') &&
+      !usersBtn.contains(t)) {
     usersPanel.classList.remove('active');
   }
   if (profilePopup.classList.contains('active') &&
-      !profilePopup.contains(e.target)) {
+      !t.closest('#profilePopup')) {
     hideProfilePopup();
   }
 });
@@ -687,6 +696,8 @@ function shouldNotify(id){
 let currentKey = 'room_general';
 let messages   = { room_general: [] };
 let tabs       = { room_general: 'Salle générale' };
+let lastRenderedKey = null;
+let notifKey = null;
 let notificationsAllowed = (typeof Notification !== 'undefined' && Notification.permission === 'granted');
 // Sur certains navigateurs (ex. Safari), la demande de permission de notification
 // doit être déclenchée par un geste utilisateur. On évite donc de la lancer
@@ -1006,6 +1017,7 @@ function onmessage(e){
       }
       if (chatWrapper.classList.contains('hidden') || currentKey !== key) {
         chatToggle.classList.add('blink');
+        notifKey = key;
       }
       if (String(data.from_client_id) !== String(client_id)) {
         const uname = data.from_client_name || clients[data.from_client_id]?.name || 'Utilisateur';
@@ -1017,6 +1029,7 @@ function onmessage(e){
           chatWrapper.classList.remove('hidden');
           chatToggle.textContent = '⬇️';
           chatToggle.classList.remove('blink');
+          notifKey = null;
         });
         if (data.dm && notificationsAllowed && shouldNotify(data.from_client_id)) {
           new Notification('Message privé de ' + (data.from_client_name || 'Utilisateur'), {
@@ -1029,6 +1042,7 @@ function onmessage(e){
             chatWrapper.classList.remove('hidden');
             chatToggle.textContent = '⬇️';
             chatToggle.classList.remove('blink');
+            notifKey = null;
             window.focus();
           };
         }
@@ -1079,7 +1093,7 @@ function renderTabs(){
   const roomsTab = document.createElement('div');
   roomsTab.className = 'tab' + (currentKey === 'rooms' ? ' active' : '');
   roomsTab.textContent = 'Salles';
-  roomsTab.onclick = () => { currentKey = 'rooms'; renderTabs(); renderMessages(); chatToggle.classList.remove('blink'); };
+  roomsTab.onclick = () => { currentKey = 'rooms'; renderTabs(); renderMessages(); chatToggle.classList.remove('blink'); if (notifKey === 'rooms') notifKey = null; };
   roomsTab.id = 'tab_rooms';
   t.appendChild(roomsTab);
 
@@ -1130,7 +1144,7 @@ function renderTabs(){
       div.appendChild(actions);
     }
 
-    div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); chatToggle.classList.remove('blink'); };
+    div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); chatToggle.classList.remove('blink'); if (notifKey === k) notifKey = null; };
     div.id = 'tab_' + k;
     t.appendChild(div);
   });
@@ -1270,6 +1284,7 @@ function getMessageKey(m){
 
 function renderMessages(){
   const box = document.getElementById('messages');
+  const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 5;
   box.innerHTML = '';
   if (currentKey === 'rooms') {
     inputWrapper.style.display = 'none';
@@ -1316,6 +1331,7 @@ function renderMessages(){
     hint.className = 'hint';
     hint.textContent = 'Les salles privées n’apparaissent pas publiquement. Partage le lien 🔗 pour y inviter quelqu’un.';
     box.appendChild(hint);
+    lastRenderedKey = currentKey;
     return;
   }
   inputWrapper.style.display = 'flex';
@@ -1326,7 +1342,10 @@ function renderMessages(){
     div.innerHTML = `<small>${m.from_client_name} • ${m.time || ''}</small>${m.content}`;
     box.appendChild(div);
   }
-  box.scrollTop = box.scrollHeight;
+  if (currentKey !== lastRenderedKey || atBottom) {
+    box.scrollTop = box.scrollHeight;
+  }
+  lastRenderedKey = currentKey;
 }
 
 /* =========================
@@ -1345,6 +1364,7 @@ function openDM(id, username){
   }
   chatToggle.classList.remove('blink');
   clearBlink(key);
+  if (notifKey === key) notifKey = null;
 }
 
 function onSubmit(){
