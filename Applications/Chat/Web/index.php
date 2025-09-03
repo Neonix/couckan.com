@@ -361,11 +361,13 @@ toolbar.appendChild(viewBtn);
 
 const startOverlay = document.getElementById('startOverlay');
 document.getElementById('watchBtn').onclick = () => {
+  showToast('Vous allez être posé sur Null Island (0 latitude, 0 longitude)');
   startOverlay.style.display = 'none';
   viewer.trackedEntity = null;
   viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(0,0,1000000)});
 };
 document.getElementById('playBtn').onclick = () => {
+  showToast('Vous allez être posé sur la Terre');
   startOverlay.style.display = 'none';
   locationState = 'all';
   shareLocation();
