@@ -172,7 +172,7 @@ function getUserMedia(constraints){
 
 const storedId = localStorage.getItem('chatUid');
 let ws, name, client_id = storedId, status = 'online', clients = {};
-let locationWatchId = null, hasFlownToLocation = false;
+let locationWatchId = null, hasFlownToLocation = false, pendingLocationMsg = null;
 let notifState = (typeof Notification !== 'undefined' && Notification.permission === 'granted') ? 'all' : 'none',
     locationState = 'none',
     viewState = 'new';
@@ -320,7 +320,7 @@ updateLocBtn();
 locBtn.onclick = () => {
   locationState = locationState === 'all' ? 'friends' : locationState === 'friends' ? 'none' : 'all';
   if (locationState === 'none') { stopLocation(); }
-  else { shareLocation(); showToast('Localisation activée'); }
+  else { pendingLocationMsg = 'Localisation activée'; shareLocation(); }
   updateLocBtn();
 };
 toolbar.appendChild(locBtn);
@@ -367,7 +367,7 @@ document.getElementById('watchBtn').onclick = () => {
   viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(0,0,1000000)});
 };
 document.getElementById('playBtn').onclick = () => {
-  showToast('Vous allez être posé sur la Terre');
+  pendingLocationMsg = 'Vous allez être posé sur la Terre';
   startOverlay.style.display = 'none';
   locationState = 'all';
   shareLocation();
@@ -799,11 +799,16 @@ function shareLocation(){
       viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1000000)});
       hasFlownToLocation = true;
     }
+    if (pendingLocationMsg && (latitude !== 0 || longitude !== 0)) {
+      showToast(pendingLocationMsg);
+      pendingLocationMsg = null;
+    }
     ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
   };
 
   const errorHandler = err => {
     console.warn('Erreur de localisation :', err.message);
+    pendingLocationMsg = null;
     showToast('Erreur localisation: ' + err.message);
   };
 
