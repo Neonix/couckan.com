@@ -172,7 +172,7 @@ function getUserMedia(constraints){
 
 const storedId = localStorage.getItem('chatUid');
 let ws, name, client_id = storedId, status = 'online', clients = {};
-let locationWatchId = null, hasFlownToLocation = false, pendingLocationMsg = null;
+let locationWatchId = null, hasFlownToLocation = false, pendingLocationMsg = null, myZoom = 1000000;
 let notifState = (typeof Notification !== 'undefined' && Notification.permission === 'granted') ? 'all' : 'none',
     locationState = 'none',
     viewState = 'new';
@@ -347,7 +347,7 @@ viewBtn.onclick = () => {
         destination: Cesium.Cartesian3.fromRadians(
           carto.longitude,
           carto.latitude,
-          5000
+          myZoom
         )
       });
     }
@@ -363,12 +363,14 @@ const startOverlay = document.getElementById('startOverlay');
 document.getElementById('watchBtn').onclick = () => {
   showToast('Vous allez être posé sur Null Island (0 latitude, 0 longitude)');
   startOverlay.style.display = 'none';
+  myZoom = 1000000;
   viewer.trackedEntity = null;
   viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(0,0,30000000)});
 };
 document.getElementById('playBtn').onclick = () => {
   pendingLocationMsg = 'Vous allez être posé sur la Terre';
   startOverlay.style.display = 'none';
+  myZoom = 5000;
   locationState = 'all';
   shareLocation();
   updateLocBtn();
@@ -796,7 +798,7 @@ function shareLocation(){
   const sendPosition = pos => {
     const {latitude, longitude} = pos.coords;
     if (!hasFlownToLocation) {
-      viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1000000)});
+      viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, myZoom)});
       hasFlownToLocation = true;
     }
     if (pendingLocationMsg && (latitude !== 0 || longitude !== 0)) {
