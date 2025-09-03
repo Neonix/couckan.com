@@ -19,7 +19,7 @@ include __DIR__ . '/../../../config.php';
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
-    #chatWrapper{position:fixed;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom));width:clamp(300px,30vw,420px);height:40vh;max-height:400px;display:flex;flex-direction:column;overflow:hidden;z-index:10;background:rgba(15,23,42,.7);backdrop-filter:blur(4px);border-radius:8px}
+    #chatWrapper{position:fixed;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom));width:clamp(300px,30vw,420px);height:40vh;max-height:400px;display:flex;flex-direction:column;z-index:10;background:rgba(15,23,42,.7);backdrop-filter:blur(4px);border-radius:8px}
     #usersPanel{position:fixed;top:calc(44px + env(safe-area-inset-top));right:0;bottom:env(safe-area-inset-bottom);display:none;width:clamp(200px,20vw,340px);background:transparent;flex-direction:column;overflow-y:auto;z-index:20;padding:1rem;padding-bottom:calc(1rem + env(safe-area-inset-bottom))}
     #usersPanel.active{display:flex}
     .cesium-viewer-toolbar{z-index:30}
@@ -229,6 +229,7 @@ const profilePopup = document.getElementById('profilePopup');
 const usersPanel = document.getElementById('usersPanel');
 const toastContainer = document.getElementById('toastContainer');
 const chatToggle = document.getElementById('chatToggle');
+const inputWrapper = document.querySelector('.input');
 chatToggle.textContent = '⬇️';
 function showToast(msg, onClick){
   const div = document.createElement('div');
@@ -1227,6 +1228,7 @@ function renderMessages(){
   const box = document.getElementById('messages');
   box.innerHTML = '';
   if (currentKey === 'rooms') {
+    inputWrapper.style.display = 'none';
     for (const [id, meta] of rooms.entries()){
       const key = 'room_' + id;
       const div = document.createElement('div');
@@ -1272,6 +1274,7 @@ function renderMessages(){
     box.appendChild(hint);
     return;
   }
+  inputWrapper.style.display = 'flex';
   const list = messages[currentKey] || [];
   for (const m of list) {
     const div = document.createElement('div');
