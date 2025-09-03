@@ -320,7 +320,14 @@ viewBtn.onclick = () => {
     viewer.trackedEntity = null;
     if (locationEntities[client_id]) {
       const pos = locationEntities[client_id].position.getValue(Cesium.JulianDate.now());
-      viewer.camera.flyTo({destination: pos});
+      const carto = Cesium.Cartographic.fromCartesian(pos);
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromRadians(
+          carto.longitude,
+          carto.latitude,
+          5000
+        )
+      });
     }
   }
   updateViewBtn();
