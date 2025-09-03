@@ -86,14 +86,16 @@ class Events
                 $randLon = mt_rand(-50, 50) / 1000;
 
                 // stocke la position dans la session pour la partager entre les workers
-                $_SESSION['lat'] = $randLat;
-                $_SESSION['lon'] = $randLon;
+                $_SESSION['lat']  = $randLat;
+                $_SESSION['lon']  = $randLon;
+                $_SESSION['real'] = false; // localisation par défaut proche de Null Island
 
                 self::$locations[$client_uuid] = [
                     'client_id'   => $client_uuid,
                     'client_name' => $client_name,
                     'lat'         => $randLat,
                     'lon'         => $randLon,
+                    'real'        => false,
                 ];
                 $loc = self::$locations[$client_uuid];
                 $loc['type'] = 'location';
@@ -112,6 +114,7 @@ class Events
                         'client_name' => $sess['client_name'] ?? 'Invité',
                         'lat'         => $sess['lat'],
                         'lon'         => $sess['lon'],
+                        'real'        => $sess['real'] ?? false,
                     ];
                 }
 
@@ -173,9 +176,11 @@ class Events
                     'client_name' => $client_name,
                     'lat'         => (float)$lat,
                     'lon'         => (float)$lon,
+                    'real'        => true,
                 ];
-                $_SESSION['lat'] = (float)$lat;
-                $_SESSION['lon'] = (float)$lon;
+                $_SESSION['lat']  = (float)$lat;
+                $_SESSION['lon']  = (float)$lon;
+                $_SESSION['real'] = true;
                 $msg = self::$locations[$uuid];
                 $msg['type'] = 'location';
                 Gateway::sendToAll(json_encode($msg));
@@ -187,6 +192,7 @@ class Events
                 if (isset(self::$locations[$uuid])) {
                     unset(self::$locations[$uuid]);
                     unset($_SESSION['lat'], $_SESSION['lon']);
+                    $_SESSION['real'] = false;
                     Gateway::sendToAll(json_encode(['type'=>'location_remove','client_id'=>$uuid]));
                 }
                 return;

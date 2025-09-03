@@ -178,7 +178,8 @@ const storedId = localStorage.getItem('chatUid');
 let ws, name, client_id = storedId, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false;
 let notifState = (typeof Notification !== 'undefined' && Notification.permission === 'granted') ? 'all' : 'none',
-    locationState = 'none';
+    locationState = 'none',
+    viewState = 'home';
 const mutedUsers = new Set();
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
@@ -302,6 +303,29 @@ locBtn.onclick = () => {
   updateLocBtn();
 };
 toolbar.appendChild(locBtn);
+const viewBtn = document.createElement('button');
+viewBtn.className = 'cesium-button cesium-toolbar-button';
+function updateViewBtn(){
+  if (viewState === 'home') { viewBtn.textContent = '🏠'; viewBtn.title = 'Vue initiale'; }
+  else if (viewState === 'new') { viewBtn.textContent = '🛸'; viewBtn.title = 'Voler vers les nouveaux utilisateurs localisés'; }
+  else { viewBtn.textContent = '👤'; viewBtn.title = 'Voler vers ma position'; }
+}
+updateViewBtn();
+viewBtn.onclick = () => {
+  viewState = viewState === 'home' ? 'new' : viewState === 'new' ? 'me' : 'home';
+  if (viewState === 'home') {
+    viewer.trackedEntity = null;
+    viewer.camera.flyHome(1);
+  } else if (viewState === 'me') {
+    viewer.trackedEntity = null;
+    if (locationEntities[client_id]) {
+      const pos = locationEntities[client_id].position.getValue(Cesium.JulianDate.now());
+      viewer.camera.flyTo({destination: pos});
+    }
+  }
+  updateViewBtn();
+};
+toolbar.appendChild(viewBtn);
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
   homeBtn.addEventListener('click', () => {
@@ -647,12 +671,16 @@ function addOrUpdateLocation(loc){
   let ent = locationEntities[id];
   const st = (clients[id] && clients[id].status) || 'online';
   const col = statusColors[st] || Cesium.Color.CYAN;
+  const wasReal = ent && ent.properties && ent.properties.real;
+  const isReal = !!loc.real;
+  if (!clients[id]) clients[id] = {name: loc.client_name || 'Invité', status: 'online'};
+  clients[id].located = isReal;
   if (!ent){
     ent = viewer.entities.add({
       position: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat),
       point: {pixelSize:10, color: col},
       label: {text: loc.client_name, font:'14px sans-serif', verticalOrigin: Cesium.VerticalOrigin.BOTTOM},
-      properties: {client_id: id, name: loc.client_name}
+      properties: {client_id: id, name: loc.client_name, real: isReal}
     });
     locationEntities[id] = ent;
   } else {
@@ -660,6 +688,10 @@ function addOrUpdateLocation(loc){
     ent.label.text = loc.client_name;
     ent.properties.name = loc.client_name;
     ent.point.color = col;
+    ent.properties.real = isReal;
+  }
+  if (viewState === 'new' && isReal && id !== client_id && (!wasReal)) {
+    viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(loc.lon, loc.lat, 1000000)});
   }
 }
 
@@ -668,6 +700,7 @@ function removeLocation(id){
     viewer.entities.remove(locationEntities[id]);
     delete locationEntities[id];
   }
+  if (clients[id]) clients[id].located = false;
 }
 
 function shareLocation(){
@@ -1111,6 +1144,7 @@ function renderUsers(){
 
     const label = document.createElement('span');
     label.textContent = (info.name || 'Invité') + (id == client_id ? ' (moi)' : '');
+    if (info.located) label.textContent += ' 📍';
     div.appendChild(label);
 
     if (id == client_id) div.onclick = chooseName;
