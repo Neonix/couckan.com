@@ -234,6 +234,7 @@ const statusColors = {
 const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
 const profilePopup = document.getElementById('profilePopup');
+let justOpenedProfile = false;
 const usersPanel = document.getElementById('usersPanel');
 const toastContainer = document.getElementById('toastContainer');
 const chatToggle = document.getElementById('chatToggle');
@@ -336,6 +337,7 @@ viewBtn.onclick = () => {
   if (viewState === 'home') {
     viewer.trackedEntity = null;
     viewer.camera.flyHome(1);
+    showToast('Vue initiale');
   } else if (viewState === 'me') {
     viewer.trackedEntity = null;
     if (locationEntities[client_id]) {
@@ -349,6 +351,9 @@ viewBtn.onclick = () => {
         )
       });
     }
+    showToast('Voler vers ma position');
+  } else {
+    showToast('Voler vers les nouveaux utilisateurs localisés');
   }
   updateViewBtn();
 };
@@ -374,6 +379,7 @@ if (homeBtn) {
 }
 
 document.addEventListener('click', (e) => {
+  if (justOpenedProfile) { justOpenedProfile = false; return; }
   const path = e.composedPath();
   const insideChat = path.includes(chatWrapper);
   const onToggle = path.includes(chatToggle);
@@ -404,6 +410,7 @@ handler.setInputAction(function(click){
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
 function showProfilePopup(id, uname, position){
+  justOpenedProfile = true;
   profilePopup.innerHTML = '';
   const title = document.createElement('div');
   title.className = 'title';
@@ -429,6 +436,7 @@ function showProfilePopup(id, uname, position){
 
 function hideProfilePopup(){
   profilePopup.classList.remove('active');
+  justOpenedProfile = false;
 }
 
 function followGps(id){
