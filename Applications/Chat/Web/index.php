@@ -19,7 +19,7 @@ include __DIR__ . '/../../../config.php';
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
-    #chatWrapper{position:fixed;left:0;right:0;bottom:calc(70px + env(safe-area-inset-bottom));top:auto;display:flex;height:40vh;max-height:400px;overflow:hidden;z-index:10;background:rgba(15,23,42,.7);backdrop-filter:blur(4px);padding-bottom:env(safe-area-inset-bottom)}
+    #chatWrapper{position:fixed;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom));width:clamp(300px,30vw,420px);height:40vh;max-height:400px;display:flex;flex-direction:column;overflow:hidden;z-index:10;background:rgba(15,23,42,.7);backdrop-filter:blur(4px);border-radius:8px}
     #usersPanel{position:fixed;top:calc(44px + env(safe-area-inset-top));right:0;bottom:env(safe-area-inset-bottom);display:none;width:clamp(200px,20vw,340px);background:transparent;flex-direction:column;overflow-y:auto;z-index:20;padding:1rem;padding-bottom:calc(1rem + env(safe-area-inset-bottom))}
     #usersPanel.active{display:flex}
     .cesium-viewer-toolbar{z-index:30}
@@ -44,7 +44,6 @@ include __DIR__ . '/../../../config.php';
     .chat{flex:1;display:flex;flex-direction:column}
     .tabs{display:flex;align-items:center;gap:.5rem;background:var(--panel);padding:.5rem 1rem}
     #tabs{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
-    .tab-icons{display:flex;align-items:center;gap:.5rem;margin-right:.5rem}
     .tab{background:var(--muted);border-radius:6px;padding:.28rem .55rem;display:flex;align-items:center;gap:.4rem;cursor:pointer}
     .tab.active{background:var(--accent);color:#fff}
     .tab.blink{animation:blink 1s infinite}
@@ -52,11 +51,11 @@ include __DIR__ . '/../../../config.php';
     .tab .actions{display:flex;align-items:center;gap:.25rem}
     .icon-btn{background:transparent;border:none;color:inherit;cursor:pointer;font-size:14px;opacity:.9}
     .icon-btn:hover{opacity:1}
-    .messages{flex:1;overflow-y:auto;padding:1rem;background:rgba(11,18,32,.6);padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+    .messages{flex:1;overflow-y:auto;padding:1rem;background:rgba(11,18,32,.6)}
     .msg{margin-bottom:12px;max-width:72%}
     .msg.me{margin-left:auto;text-align:right}
     .msg small{display:block;color:var(--sub);font-size:.72rem;margin-bottom:2px}
-    .input{position:fixed;left:0;right:0;bottom:0;display:flex;gap:.5rem;background:rgba(30,41,59,.6);padding:.6rem;padding-bottom:calc(.6rem + env(safe-area-inset-bottom));z-index:30;width:85%;}
+    .input{display:flex;gap:.5rem;background:rgba(30,41,59,.6);padding:.6rem;}
     .input textarea{flex:1;min-height:42px;max-height:160px;resize:vertical;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.6rem;border-radius:8px}
     .input button{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:.55rem 1rem;cursor:pointer}
     .dot{width:10px;height:10px;border-radius:50%}
@@ -83,8 +82,7 @@ include __DIR__ . '/../../../config.php';
     #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
     #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
     @media (max-width:768px){
-      #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none;bottom:calc(70px + env(safe-area-inset-bottom))}
-      .chat{order:1;width:100%}
+      #chatWrapper{width:95%;right:2.5%;height:60vh;max-height:none}
       .sidebar{position:absolute;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
       .sidebar.open{transform:translateX(0)}
       .cesium-viewer-toolbar{display:flex;flex-wrap:wrap;gap:.4rem}
@@ -96,38 +94,18 @@ include __DIR__ . '/../../../config.php';
 <body>
   <div id="cesiumContainer"></div>
   <div id="chatWrapper">
-  <!-- Salles -->
-  <aside class="sidebar rooms">
-    <details open>
-      <summary class="h2">🛰️ Salles</summary>
-      <div id="rooms" class="list"></div>
-      <div class="row">
-        <input id="newRoomName" type="text" placeholder="Nom de la salle" />
-      </div>
-      <div class="row" style="align-items:center">
-        <label><input id="isPrivate" type="checkbox" /> Privée (via lien)</label>
-        <button class="btn" onclick="createRoom()">Créer</button>
-      </div>
-      <div class="hint">Les salles privées n’apparaissent pas publiquement. Partage le lien 🔗 pour y inviter quelqu’un.</div>
-    </details>
-  </aside>
-
   <!-- Chat -->
   <main class="chat">
     <div class="tabs">
-      <div class="tab-icons">
-        <button id="roomsBtn" class="icon-btn" onclick="toggleRooms()" ontouchstart="toggleRooms()" title="Salles">📂</button>
-      </div>
       <div id="tabs"></div>
     </div>
     <div class="messages" id="messages"></div>
+    <div class="input">
+      <textarea id="input" placeholder="Écris un message..."></textarea>
+      <button onclick="onSubmit()">Envoyer</button>
+    </div>
   </main>
   </div>
-  
-  <div class="input">
-    <textarea id="input" placeholder="Écris un message..."></textarea>
-    <button onclick="onSubmit()">Envoyer</button>
-  </div> 
 
   <button id="chatToggle" class="chat-toggle" onclick="toggleChat()" title="Chat">⬇️</button>
 
@@ -264,10 +242,6 @@ function showToast(msg, onClick){
   setTimeout(()=>div.classList.add('hide'),4000);
   setTimeout(()=>div.remove(),4500);
 }
-function toggleRooms(){
-  document.querySelector('.sidebar.rooms').classList.toggle('open');
-  usersPanel.classList.remove('active');
-}
 function toggleChat(){
   chatWrapper.classList.toggle('hidden');
   chatToggle.textContent = chatWrapper.classList.contains('hidden') ? '💬' : '⬇️';
@@ -289,7 +263,6 @@ usersBtn.onclick = () => {
     ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
   }
   usersPanel.classList.toggle('active');
-  document.querySelector('.sidebar.rooms').classList.remove('open');
 };
 toolbar.appendChild(usersBtn);
 const notifBtn = document.createElement('button');
@@ -361,7 +334,6 @@ toolbar.appendChild(viewBtn);
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
   homeBtn.addEventListener('click', () => {
-    document.querySelector('.sidebar.rooms').classList.remove('open');
     usersPanel.classList.remove('active');
   });
 }
@@ -1064,25 +1036,19 @@ function ensureRoomTab(roomId){
 }
 
 function renderRooms(){
-  const cont = document.getElementById('rooms');
-  cont.innerHTML = '';
-  for (const [id, meta] of rooms.entries()){
-    const key = 'room_' + id;
-    const div = document.createElement('div');
-    div.className = 'item' + (currentKey === key ? ' active' : '');
-    div.textContent = (meta.visibility === 'private' ? '🔒 ' : '') + 'Salle ' + id;
-    div.onclick = () => {
-      currentKey = key;
-      ensureRoomTab(id);
-      renderTabs(); renderMessages();
-      loginRoom(id);
-    };
-    cont.appendChild(div);
-  }
+  if (currentKey === 'rooms') renderMessages();
 }
 
 function renderTabs(){
   const t = document.getElementById('tabs'); t.innerHTML = '';
+  // Onglet Salles
+  const roomsTab = document.createElement('div');
+  roomsTab.className = 'tab' + (currentKey === 'rooms' ? ' active' : '');
+  roomsTab.textContent = 'Salles';
+  roomsTab.onclick = () => { currentKey = 'rooms'; renderTabs(); renderMessages(); };
+  roomsTab.id = 'tab_rooms';
+  t.appendChild(roomsTab);
+
   Object.keys(tabs).forEach(k => {
     const div   = document.createElement('div');
     const label = document.createElement('span');
@@ -1260,6 +1226,52 @@ function getMessageKey(m){
 function renderMessages(){
   const box = document.getElementById('messages');
   box.innerHTML = '';
+  if (currentKey === 'rooms') {
+    for (const [id, meta] of rooms.entries()){
+      const key = 'room_' + id;
+      const div = document.createElement('div');
+      div.className = 'item' + (currentKey === key ? ' active' : '');
+      div.textContent = (meta.visibility === 'private' ? '🔒 ' : '') + 'Salle ' + id;
+      div.onclick = () => {
+        currentKey = key;
+        ensureRoomTab(id);
+        renderTabs(); renderMessages();
+        loginRoom(id);
+      };
+      box.appendChild(div);
+    }
+    const row1 = document.createElement('div');
+    row1.className = 'row';
+    const input = document.createElement('input');
+    input.id = 'newRoomName';
+    input.type = 'text';
+    input.placeholder = 'Nom de la salle';
+    row1.appendChild(input);
+    box.appendChild(row1);
+
+    const row2 = document.createElement('div');
+    row2.className = 'row';
+    row2.style.alignItems = 'center';
+    const label = document.createElement('label');
+    const checkbox = document.createElement('input');
+    checkbox.id = 'isPrivate';
+    checkbox.type = 'checkbox';
+    label.appendChild(checkbox);
+    label.appendChild(document.createTextNode(' Privée (via lien)'));
+    row2.appendChild(label);
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.textContent = 'Créer';
+    btn.onclick = createRoom;
+    row2.appendChild(btn);
+    box.appendChild(row2);
+
+    const hint = document.createElement('div');
+    hint.className = 'hint';
+    hint.textContent = 'Les salles privées n’apparaissent pas publiquement. Partage le lien 🔗 pour y inviter quelqu’un.';
+    box.appendChild(hint);
+    return;
+  }
   const list = messages[currentKey] || [];
   for (const m of list) {
     const div = document.createElement('div');
@@ -1324,7 +1336,7 @@ function clearBlink(key){
 /* Boot UI */
 connect();
 renderTabs();
-renderRooms();
+renderMessages();
 </script>
 </body>
 </html>
