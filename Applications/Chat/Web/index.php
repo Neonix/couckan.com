@@ -14,13 +14,13 @@ include __DIR__ . '/../../../config.php';
       --bg:#0f172a; --panel:#1e293b; --muted:#334155; --muted-2:#475569;
       --accent:#0ea5e9; --text:#f8fafc; --sub:#94a3b8;
       --ok:#22c55e; --busy:#f97316; --away:#ef4444; --warn:#facc15; --invisible:#6b7280;
-      --nav-h:56px;
+      --nav-h:0px;
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
-    #chatWrapper{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + 70px + env(safe-area-inset-bottom));top:auto;display:flex;height:40vh;max-height:400px;overflow:hidden;z-index:10;background:rgba(15,23,42,.7);backdrop-filter:blur(4px);padding-bottom:env(safe-area-inset-bottom)}
-    #usersPanel{position:fixed;top:calc(44px + env(safe-area-inset-top));right:0;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom));display:none;width:clamp(200px,20vw,340px);background:transparent;flex-direction:column;overflow-y:auto;z-index:20;padding:1rem;padding-bottom:calc(1rem + env(safe-area-inset-bottom))}
+    #chatWrapper{position:fixed;left:0;right:0;bottom:calc(70px + env(safe-area-inset-bottom));top:auto;display:flex;height:40vh;max-height:400px;overflow:hidden;z-index:10;background:rgba(15,23,42,.7);backdrop-filter:blur(4px);padding-bottom:env(safe-area-inset-bottom)}
+    #usersPanel{position:fixed;top:calc(44px + env(safe-area-inset-top));right:0;bottom:env(safe-area-inset-bottom);display:none;width:clamp(200px,20vw,340px);background:transparent;flex-direction:column;overflow-y:auto;z-index:20;padding:1rem;padding-bottom:calc(1rem + env(safe-area-inset-bottom))}
     #usersPanel.active{display:flex}
     .cesium-viewer-toolbar{z-index:30}
     .cesium-toolbar-button{margin:2px}
@@ -67,7 +67,7 @@ include __DIR__ . '/../../../config.php';
     .toast{background:rgba(30,41,59,.9);color:var(--text);padding:.5rem 1rem;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,.3);opacity:1;transition:opacity .5s}
     .toast.hide{opacity:0}
     #chatWrapper.hidden{display:none}
-    #chatToggle{position:fixed;right:1rem;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 1rem);background:var(--panel);color:var(--text);border:none;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 4px rgba(0,0,0,.4);z-index:25;cursor:pointer}
+    #chatToggle{position:fixed;right:1rem;bottom:calc(1rem + env(safe-area-inset-bottom));background:var(--panel);color:var(--text);border:none;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 4px rgba(0,0,0,.4);z-index:25;cursor:pointer}
     .profile-popup{position:absolute;display:none;flex-direction:column;gap:.25rem;padding:.5rem;background:var(--panel);border:1px solid var(--muted-2);border-radius:8px;z-index:40;min-width:160px}
     .profile-popup.active{display:flex}
     .profile-popup .title{font-weight:700;margin-bottom:.25rem}
@@ -83,12 +83,12 @@ include __DIR__ . '/../../../config.php';
     #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
     #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
     @media (max-width:768px){
-      #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none;bottom:calc(var(--nav-h) + 70px + env(safe-area-inset-bottom))}
+      #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none;bottom:calc(70px + env(safe-area-inset-bottom))}
       .chat{order:1;width:100%}
       .sidebar{position:absolute;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
       .sidebar.open{transform:translateX(0)}
       .cesium-viewer-toolbar{display:flex;flex-wrap:wrap;gap:.4rem}
-      #usersPanel{top:calc(44px + env(safe-area-inset-top));bottom:calc(var(--nav-h) + env(safe-area-inset-bottom));width:100%;max-width:none;padding-bottom:calc(1rem + env(safe-area-inset-bottom));transform:translateX(100%);transition:transform .3s}
+      #usersPanel{top:calc(44px + env(safe-area-inset-top));bottom:env(safe-area-inset-bottom);width:100%;max-width:none;padding-bottom:calc(1rem + env(safe-area-inset-bottom));transform:translateX(100%);transition:transform .3s}
       #usersPanel.active{transform:translateX(0)}
     }
   </style>
