@@ -65,6 +65,8 @@ include __DIR__ . '/../../../config.php';
     #toastContainer{position:fixed;top:calc(1rem + env(safe-area-inset-top));left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;align-items:center}
     .toast{background:rgba(30,41,59,.9);color:var(--text);padding:.5rem 1rem;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,.3);opacity:1;transition:opacity .5s}
     .toast.hide{opacity:0}
+    #chatWrapper.hidden{display:none}
+    #chatToggle{position:fixed;right:1rem;bottom:calc(var(--nav-h) + env(safe-area-inset-bottom) + 1rem);background:var(--panel);color:var(--text);border:none;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 4px rgba(0,0,0,.4);z-index:25;cursor:pointer}
     .profile-popup{position:absolute;display:none;flex-direction:column;gap:.25rem;padding:.5rem;background:var(--panel);border:1px solid var(--muted-2);border-radius:8px;z-index:40;min-width:160px}
     .profile-popup.active{display:flex}
     .profile-popup .title{font-weight:700;margin-bottom:.25rem}
@@ -113,8 +115,7 @@ include __DIR__ . '/../../../config.php';
   <main class="chat">
     <div class="tabs">
       <div class="tab-icons">
-        <button class="icon-btn" onclick="toggleRooms()" title="Salles">📂</button>
-        <button class="icon-btn" onclick="toggleUsers()" title="Utilisateurs">👥</button>
+        <button id="roomsBtn" class="icon-btn" onclick="toggleRooms()" ontouchstart="toggleRooms()" title="Salles">📂</button>
       </div>
       <div id="tabs"></div>
     </div>
@@ -125,6 +126,7 @@ include __DIR__ . '/../../../config.php';
     </div>
   </main>
   </div>
+  <button id="chatToggle" class="chat-toggle" onclick="toggleChat()" title="Chat">⬇️</button>
   <!-- Utilisateurs -->
   <aside id="usersPanel" class="sidebar users">
       <div id="users" class="list"></div>
@@ -244,6 +246,8 @@ const toolbar = document.querySelector('.cesium-viewer-toolbar');
 const profilePopup = document.getElementById('profilePopup');
 const usersPanel = document.getElementById('usersPanel');
 const toastContainer = document.getElementById('toastContainer');
+const chatToggle = document.getElementById('chatToggle');
+chatToggle.textContent = '⬇️';
 function showToast(msg, onClick){
   const div = document.createElement('div');
   div.className = 'toast';
@@ -260,9 +264,9 @@ function toggleRooms(){
   document.querySelector('.sidebar.rooms').classList.toggle('open');
   usersPanel.classList.remove('active');
 }
-function toggleUsers(){
-  usersPanel.classList.toggle('active');
-  document.querySelector('.sidebar.rooms').classList.remove('open');
+function toggleChat(){
+  chatWrapper.classList.toggle('hidden');
+  chatToggle.textContent = chatWrapper.classList.contains('hidden') ? '💬' : '⬇️';
 }
 // place Cesium toolbar above chat overlay so buttons stay visible
 toolbar.style.zIndex = 30;
