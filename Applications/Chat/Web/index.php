@@ -20,6 +20,8 @@ include __DIR__ . '/../../../config.php';
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
     #chatWrapper{position:fixed;left:0;right:0;bottom:0;top:auto;display:none;height:40vh;max-height:400px;overflow:hidden;z-index:10}
     #chatWrapper.active{display:flex}
+    #usersPanel{position:fixed;top:0;right:0;bottom:0;display:none;width:clamp(200px,20vw,340px);background:var(--panel);flex-direction:column;overflow-y:auto;z-index:10}
+    #usersPanel.active{display:flex}
     .cesium-viewer-toolbar{z-index:30}
     .cesium-toolbar-button{margin:2px}
     .sidebar{flex:0 0 clamp(200px,20vw,340px);background:var(--panel);display:flex;flex-direction:column;padding:0;overflow-y:auto;transition:width .2s ease,flex-basis .2s ease}
@@ -75,13 +77,14 @@ include __DIR__ . '/../../../config.php';
     #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
     @media (max-width:768px){
       #chatWrapper{flex-direction:column;overflow:hidden;height:60vh;max-height:none}
-      .chat{order:1;width:100%;margin-bottom:60px}
+      .chat{order:1;width:100%;padding-bottom:60px}
       .sidebar{position:absolute;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
-      .sidebar.users{left:auto;right:0;transform:translateX(100%)}
       .sidebar.open{transform:translateX(0)}
       .mobile-nav{display:flex;justify-content:space-around;gap:.5rem;background:var(--panel);position:absolute;bottom:0;left:0;right:0;z-index:25;padding:.5rem}
       .mobile-nav button{flex:1;border:none;background:var(--muted);color:var(--text);border-radius:6px;padding:.5rem}
       .cesium-viewer-toolbar{display:flex;flex-wrap:wrap;gap:.4rem}
+      #usersPanel{width:80%;max-width:320px;transform:translateX(100%);transition:transform .3s}
+      #usersPanel.active{transform:translateX(0)}
     }
   </style>
 </head>
@@ -113,9 +116,13 @@ include __DIR__ . '/../../../config.php';
       <button onclick="onSubmit()">Envoyer</button>
     </div>
   </main>
-
+  <div class="mobile-nav">
+    <button onclick="toggleRooms()">Salles</button>
+    <button onclick="toggleUsers()">Utilisateurs</button>
+  </div>
+  </div>
   <!-- Utilisateurs -->
-  <aside class="sidebar users">
+  <aside id="usersPanel" class="sidebar users">
     <details open>
       <summary class="h2">👥 Utilisateurs</summary>
       <div id="users" class="list"></div>
@@ -125,13 +132,8 @@ include __DIR__ . '/../../../config.php';
         <option value="busy">🟠 Occupé</option>
         <option value="invisible">⚫ Invisible</option>
       </select>
-      </details>
+    </details>
   </aside>
-  <div class="mobile-nav">
-    <button onclick="toggleRooms()">Salles</button>
-    <button onclick="toggleUsers()">Utilisateurs</button>
-  </div>
-  </div>
   <div id="profilePopup" class="profile-popup"></div>
   <div id="callOverlay">
     <video id="localVideo" autoplay muted playsinline></video>
@@ -236,12 +238,13 @@ const statusColors = {
 const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
 const profilePopup = document.getElementById('profilePopup');
+const usersPanel = document.getElementById('usersPanel');
 function toggleRooms(){
   document.querySelector('.sidebar.rooms').classList.toggle('open');
-  document.querySelector('.sidebar.users').classList.remove('open');
+  usersPanel.classList.remove('active');
 }
 function toggleUsers(){
-  document.querySelector('.sidebar.users').classList.toggle('open');
+  usersPanel.classList.toggle('active');
   document.querySelector('.sidebar.rooms').classList.remove('open');
 }
 // place Cesium toolbar above chat overlay so buttons stay visible
@@ -264,7 +267,8 @@ chatBtn.onclick = () => {
   }
   chatWrapper.classList.toggle('active');
   if (chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink');
-  document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
+  document.querySelector('.sidebar.rooms').classList.remove('open');
+  usersPanel.classList.remove('active');
 };
 toolbar.appendChild(chatBtn);
 const notifBtn = document.createElement('button');
@@ -337,7 +341,8 @@ const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
   homeBtn.addEventListener('click', () => {
     chatWrapper.classList.remove('active');
-    document.querySelectorAll('.sidebar').forEach(s => s.classList.remove('open'));
+    document.querySelector('.sidebar.rooms').classList.remove('open');
+    usersPanel.classList.remove('active');
   });
 }
 
@@ -347,8 +352,8 @@ if (window.matchMedia('(max-width:768px)').matches) {
   usersBtn.textContent = '📋';
   usersBtn.title = 'Utilisateurs connectés';
   usersBtn.onclick = () => {
-    chatWrapper.classList.add('active');
-    document.querySelector('.sidebar.users').classList.add('open');
+    usersPanel.classList.toggle('active');
+    chatWrapper.classList.remove('active');
     document.querySelector('.sidebar.rooms').classList.remove('open');
   };
   toolbar.appendChild(usersBtn);
@@ -397,6 +402,25 @@ function hideProfilePopup(){
 function followGps(id){
   if (locationEntities[id]) {
     viewer.trackedEntity = locationEntities[id];
+  }
+}
+
+function focusUser(id, uname){
+  const ent = locationEntities[id];
+  usersPanel.classList.remove('active');
+  if (ent){
+    const pos = ent.position.getValue(Cesium.JulianDate.now());
+    const carto = Cesium.Cartographic.fromCartesian(pos);
+    viewer.trackedEntity = null;
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, 5000),
+      complete: () => {
+        const win = Cesium.SceneTransforms.wgs84ToWindowCoordinates(viewer.scene, pos);
+        if (win) showProfilePopup(id, uname, win);
+      }
+    });
+  } else {
+    showProfilePopup(id, uname, {x:window.innerWidth/2, y:window.innerHeight/2});
   }
 }
 
@@ -890,16 +914,19 @@ function onmessage(e){
 
     case 'locations': {
       (data.locations || []).forEach(l => addOrUpdateLocation(l));
+      renderUsers();
       break;
     }
 
     case 'location': {
       addOrUpdateLocation(data);
+      renderUsers();
       break;
     }
 
     case 'location_remove': {
       removeLocation(data.client_id);
+      renderUsers();
       break;
     }
 
@@ -1155,7 +1182,7 @@ function renderUsers(){
     div.appendChild(label);
 
     if (id == client_id) div.onclick = chooseName;
-    else div.onclick = () => openDM(id, info.name || 'Invité');
+    else div.onclick = () => focusUser(id, info.name || 'Invité');
 
     u.appendChild(div);
   });
