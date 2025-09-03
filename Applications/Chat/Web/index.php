@@ -671,7 +671,7 @@ function addOrUpdateLocation(loc){
   let ent = locationEntities[id];
   const st = (clients[id] && clients[id].status) || 'online';
   const col = statusColors[st] || Cesium.Color.CYAN;
-  const wasReal = ent && ent.properties && ent.properties.real;
+  const wasReal = !!(ent && ent.properties && ent.properties.real && ent.properties.real.getValue(Cesium.JulianDate.now()));
   const isReal = !!loc.real;
   if (!clients[id]) clients[id] = {name: loc.client_name || 'Invité', status: 'online'};
   clients[id].located = isReal;
