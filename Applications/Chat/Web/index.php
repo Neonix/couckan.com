@@ -48,6 +48,7 @@ include __DIR__ . '/../../../config.php';
     .tab.active{background:var(--accent);color:#fff}
     .tab.blink{animation:blink 1s infinite}
     .cesium-toolbar-button.blink{animation:blink 1s infinite}
+    #chatToggle.blink{animation:blink 1s infinite}
     .tab .actions{display:flex;align-items:center;gap:.25rem}
     .icon-btn{background:transparent;border:none;color:inherit;cursor:pointer;font-size:14px;opacity:.9}
     .icon-btn:hover{opacity:1}
@@ -245,7 +246,12 @@ function showToast(msg, onClick){
 }
 function toggleChat(){
   chatWrapper.classList.toggle('hidden');
-  chatToggle.textContent = chatWrapper.classList.contains('hidden') ? '💬' : '⬇️';
+  const hidden = chatWrapper.classList.contains('hidden');
+  chatToggle.textContent = hidden ? '💬' : '⬇️';
+  if (!hidden) {
+    chatToggle.classList.remove('blink');
+    clearBlink(currentKey);
+  }
 }
 // place Cesium toolbar above chat overlay so buttons stay visible
 toolbar.style.zIndex = 30;
@@ -339,6 +345,24 @@ if (homeBtn) {
   });
 }
 
+document.addEventListener('click', (e) => {
+  if (!chatWrapper.classList.contains('hidden') &&
+      !chatWrapper.contains(e.target) &&
+      !chatToggle.contains(e.target)) {
+    chatWrapper.classList.add('hidden');
+    chatToggle.textContent = '💬';
+  }
+  if (usersPanel.classList.contains('active') &&
+      !usersPanel.contains(e.target) &&
+      !usersBtn.contains(e.target)) {
+    usersPanel.classList.remove('active');
+  }
+  if (profilePopup.classList.contains('active') &&
+      !profilePopup.contains(e.target)) {
+    hideProfilePopup();
+  }
+});
+
 const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 handler.setInputAction(function(click){
   const picked = viewer.scene.pick(click.position);
@@ -360,7 +384,7 @@ function showProfilePopup(id, uname, position){
   const addBtn = (label, handler) => {
     const b = document.createElement('button');
     b.textContent = label;
-    b.onclick = () => { handler(); hideProfilePopup(); };
+    b.onclick = (ev) => { ev.stopPropagation(); handler(); hideProfilePopup(); };
     profilePopup.appendChild(b);
   };
   addBtn('Chat', () => { openDM(id, uname); });
@@ -980,6 +1004,9 @@ function onmessage(e){
       } else {
         blinkTab(key);
       }
+      if (chatWrapper.classList.contains('hidden') || currentKey !== key) {
+        chatToggle.classList.add('blink');
+      }
       if (String(data.from_client_id) !== String(client_id)) {
         const uname = data.from_client_name || clients[data.from_client_id]?.name || 'Utilisateur';
         showToast(`${uname}: ${data.content}`, ()=>{
@@ -987,6 +1014,9 @@ function onmessage(e){
           renderTabs();
           renderMessages();
           clearBlink(key);
+          chatWrapper.classList.remove('hidden');
+          chatToggle.textContent = '⬇️';
+          chatToggle.classList.remove('blink');
         });
         if (data.dm && notificationsAllowed && shouldNotify(data.from_client_id)) {
           new Notification('Message privé de ' + (data.from_client_name || 'Utilisateur'), {
@@ -996,6 +1026,9 @@ function onmessage(e){
             renderTabs();
             renderMessages();
             clearBlink(key);
+            chatWrapper.classList.remove('hidden');
+            chatToggle.textContent = '⬇️';
+            chatToggle.classList.remove('blink');
             window.focus();
           };
         }
@@ -1046,7 +1079,7 @@ function renderTabs(){
   const roomsTab = document.createElement('div');
   roomsTab.className = 'tab' + (currentKey === 'rooms' ? ' active' : '');
   roomsTab.textContent = 'Salles';
-  roomsTab.onclick = () => { currentKey = 'rooms'; renderTabs(); renderMessages(); };
+  roomsTab.onclick = () => { currentKey = 'rooms'; renderTabs(); renderMessages(); chatToggle.classList.remove('blink'); };
   roomsTab.id = 'tab_rooms';
   t.appendChild(roomsTab);
 
@@ -1097,7 +1130,7 @@ function renderTabs(){
       div.appendChild(actions);
     }
 
-    div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); };
+    div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); chatToggle.classList.remove('blink'); };
     div.id = 'tab_' + k;
     t.appendChild(div);
   });
@@ -1295,6 +1328,12 @@ function openDM(id, username){
   currentKey = key;
   renderTabs();
   renderMessages();
+  if (chatWrapper.classList.contains('hidden')) {
+    chatWrapper.classList.remove('hidden');
+    chatToggle.textContent = '⬇️';
+  }
+  chatToggle.classList.remove('blink');
+  clearBlink(key);
 }
 
 function onSubmit(){
