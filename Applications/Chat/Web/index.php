@@ -82,6 +82,9 @@ include __DIR__ . '/../../../config.php';
     #callOverlay .error{color:#f87171;margin-top:.5rem;text-align:center}
     #remoteVideos{display:flex;flex-wrap:wrap;justify-content:center}
     #callControls{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-top:.5rem}
+    #startOverlay{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;gap:2rem;background:rgba(0,0,0,.5);z-index:200}
+    #startOverlay .choice{background:var(--panel);color:var(--text);padding:2rem 3rem;border-radius:12px;text-align:center;font-size:1.5rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:.5rem}
+    #startOverlay .choice span{font-size:2.5rem}
     @media (max-width:768px){
       #chatWrapper{width:95%;right:2.5%;max-height:60vh}
       .sidebar{position:absolute;top:0;bottom:0;flex:none;width:80%;max-width:320px;background:var(--panel);height:100%;overflow-y:auto;transform:translateX(-100%);transition:transform .3s;z-index:20}
@@ -94,6 +97,10 @@ include __DIR__ . '/../../../config.php';
 </head>
 <body>
   <div id="cesiumContainer"></div>
+  <div id="startOverlay">
+    <div class="choice" id="watchBtn"><span>👁️</span>Regarder</div>
+    <div class="choice" id="playBtn"><span>📍</span>Jouer</div>
+  </div>
   <div id="chatWrapper">
   <!-- Chat -->
   <main class="chat">
@@ -165,7 +172,7 @@ function getUserMedia(constraints){
 
 const storedId = localStorage.getItem('chatUid');
 let ws, name, client_id = storedId, status = 'online', clients = {};
-let locationWatchId = null, hasFlownToLocation = false;
+let locationWatchId = null, hasFlownToLocation = false, pendingLocationMsg = null;
 let notifState = (typeof Notification !== 'undefined' && Notification.permission === 'granted') ? 'all' : 'none',
     locationState = 'none',
     viewState = 'new';
@@ -227,6 +234,7 @@ const statusColors = {
 const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
 const profilePopup = document.getElementById('profilePopup');
+let justOpenedProfile = false;
 const usersPanel = document.getElementById('usersPanel');
 const toastContainer = document.getElementById('toastContainer');
 const chatToggle = document.getElementById('chatToggle');
@@ -312,7 +320,7 @@ updateLocBtn();
 locBtn.onclick = () => {
   locationState = locationState === 'all' ? 'friends' : locationState === 'friends' ? 'none' : 'all';
   if (locationState === 'none') { stopLocation(); }
-  else { shareLocation(); showToast('Localisation activée'); }
+  else { pendingLocationMsg = 'Localisation activée'; shareLocation(); }
   updateLocBtn();
 };
 toolbar.appendChild(locBtn);
@@ -329,6 +337,7 @@ viewBtn.onclick = () => {
   if (viewState === 'home') {
     viewer.trackedEntity = null;
     viewer.camera.flyHome(1);
+    showToast('Vue initiale');
   } else if (viewState === 'me') {
     viewer.trackedEntity = null;
     if (locationEntities[client_id]) {
@@ -342,10 +351,28 @@ viewBtn.onclick = () => {
         )
       });
     }
+    showToast('Voler vers ma position');
+  } else {
+    showToast('Voler vers les nouveaux utilisateurs localisés');
   }
   updateViewBtn();
 };
 toolbar.appendChild(viewBtn);
+
+const startOverlay = document.getElementById('startOverlay');
+document.getElementById('watchBtn').onclick = () => {
+  showToast('Vous allez être posé sur Null Island (0 latitude, 0 longitude)');
+  startOverlay.style.display = 'none';
+  viewer.trackedEntity = null;
+  viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(0,0,1000000)});
+};
+document.getElementById('playBtn').onclick = () => {
+  pendingLocationMsg = 'Vous allez être posé sur la Terre';
+  startOverlay.style.display = 'none';
+  locationState = 'all';
+  shareLocation();
+  updateLocBtn();
+};
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
   homeBtn.addEventListener('click', () => {
@@ -354,6 +381,7 @@ if (homeBtn) {
 }
 
 document.addEventListener('click', (e) => {
+  if (justOpenedProfile) { justOpenedProfile = false; return; }
   const path = e.composedPath();
   const insideChat = path.includes(chatWrapper);
   const onToggle = path.includes(chatToggle);
@@ -384,6 +412,7 @@ handler.setInputAction(function(click){
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
 function showProfilePopup(id, uname, position){
+  justOpenedProfile = true;
   profilePopup.innerHTML = '';
   const title = document.createElement('div');
   title.className = 'title';
@@ -409,6 +438,7 @@ function showProfilePopup(id, uname, position){
 
 function hideProfilePopup(){
   profilePopup.classList.remove('active');
+  justOpenedProfile = false;
 }
 
 function followGps(id){
@@ -769,11 +799,16 @@ function shareLocation(){
       viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, 1000000)});
       hasFlownToLocation = true;
     }
+    if (pendingLocationMsg && (latitude !== 0 || longitude !== 0)) {
+      showToast(pendingLocationMsg);
+      pendingLocationMsg = null;
+    }
     ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
   };
 
   const errorHandler = err => {
     console.warn('Erreur de localisation :', err.message);
+    pendingLocationMsg = null;
     showToast('Erreur localisation: ' + err.message);
   };
 
