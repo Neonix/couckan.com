@@ -221,8 +221,16 @@ Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
 
 const viewer = new Cesium.Viewer('cesiumContainer', {
     geocoder:false, homeButton:true, baseLayerPicker:false, timeline:false, animation:false,
-    sceneModePicker:false, navigationHelpButton:false
+    sceneModePicker:false, navigationHelpButton:false, shouldAnimate:true
   });
+
+viewer.scene.moon.show = true;
+viewer.scene.sun.show = true;
+viewer.scene.globe.enableLighting = true;
+viewer.clock.clockStep = Cesium.ClockStep.SYSTEM_CLOCK;
+viewer.clock.multiplier = 1;
+viewer.clock.currentTime = Cesium.JulianDate.now();
+viewer.clock.shouldAnimate = true;
   
 const locationEntities = {};
 const statusColors = {
