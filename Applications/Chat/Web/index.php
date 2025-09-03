@@ -18,8 +18,7 @@ include __DIR__ . '/../../../config.php';
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
-    #chatWrapper{position:fixed;left:0;right:0;bottom:0;top:auto;display:none;height:40vh;max-height:400px;overflow:hidden;z-index:10}
-    #chatWrapper.active{display:flex}
+    #chatWrapper{position:fixed;left:0;right:0;bottom:0;top:auto;display:flex;height:40vh;max-height:400px;overflow:hidden;z-index:10;background:rgba(15,23,42,.7);backdrop-filter:blur(4px)}
     #usersPanel{position:fixed;top:0;right:0;bottom:0;display:none;width:clamp(200px,20vw,340px);background:var(--panel);flex-direction:column;overflow-y:auto;z-index:10}
     #usersPanel.active{display:flex}
     .cesium-viewer-toolbar{z-index:30}
@@ -49,11 +48,11 @@ include __DIR__ . '/../../../config.php';
     .tab .actions{display:flex;align-items:center;gap:.25rem}
     .icon-btn{background:transparent;border:none;color:inherit;cursor:pointer;font-size:14px;opacity:.9}
     .icon-btn:hover{opacity:1}
-    .messages{flex:1;overflow-y:auto;padding:1rem;background:#0b1220}
+    .messages{flex:1;overflow-y:auto;padding:1rem;background:rgba(11,18,32,.6)}
     .msg{margin-bottom:12px;max-width:72%}
     .msg.me{margin-left:auto;text-align:right}
     .msg small{display:block;color:var(--sub);font-size:.72rem;margin-bottom:2px}
-    .input{display:flex;gap:.5rem;background:var(--panel);padding:.6rem}
+    .input{display:flex;gap:.5rem;background:rgba(30,41,59,.6);padding:.6rem}
     .input textarea{flex:1;min-height:42px;max-height:160px;resize:vertical;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.6rem;border-radius:8px}
     .input button{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:.55rem 1rem;cursor:pointer}
     .dot{width:10px;height:10px;border-radius:50%}
@@ -61,6 +60,9 @@ include __DIR__ . '/../../../config.php';
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
     .mobile-nav{display:none}
+    #toastContainer{position:fixed;top:1rem;right:1rem;display:flex;flex-direction:column;gap:.5rem;z-index:100}
+    .toast{background:rgba(30,41,59,.9);color:var(--text);padding:.5rem 1rem;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,.3);opacity:1;transition:opacity .5s}
+    .toast.hide{opacity:0}
     .profile-popup{position:absolute;display:none;flex-direction:column;gap:.25rem;padding:.5rem;background:var(--panel);border:1px solid var(--muted-2);border-radius:8px;z-index:40;min-width:160px}
     .profile-popup.active{display:flex}
     .profile-popup .title{font-weight:700;margin-bottom:.25rem}
@@ -147,6 +149,7 @@ include __DIR__ . '/../../../config.php';
       <button class="btn" onclick="hangup()">Raccrocher</button>
     </div>
   </div>
+  <div id="toastContainer"></div>
 
 <script>
 /* =========================
@@ -189,6 +192,7 @@ let micEnabled = true, videoEnabled = true;
 
 function showCallError(msg){
   document.getElementById('callError').textContent = msg || '';
+  if (msg) showToast('Erreur: ' + msg);
 }
 
 function mediaErrorMessage(err){
@@ -239,6 +243,15 @@ const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
 const profilePopup = document.getElementById('profilePopup');
 const usersPanel = document.getElementById('usersPanel');
+const toastContainer = document.getElementById('toastContainer');
+function showToast(msg){
+  const div = document.createElement('div');
+  div.className = 'toast';
+  div.textContent = msg;
+  toastContainer.appendChild(div);
+  setTimeout(()=>div.classList.add('hide'),4000);
+  setTimeout(()=>div.remove(),4500);
+}
 function toggleRooms(){
   document.querySelector('.sidebar.rooms').classList.toggle('open');
   usersPanel.classList.remove('active');
@@ -249,28 +262,24 @@ function toggleUsers(){
 }
 // place Cesium toolbar above chat overlay so buttons stay visible
 toolbar.style.zIndex = 30;
-const chatBtn = document.createElement('button');
-chatBtn.className = 'cesium-button cesium-toolbar-button';
-function updateChatBtn(){
-  const uname = localStorage.getItem('chatName') || 'Invité';
+const usersBtn = document.createElement('button');
+usersBtn.className = 'cesium-button cesium-toolbar-button';
+function updateUsersBtn(){
   const count = Object.keys(clients).length;
-  chatBtn.textContent = `👥 (${count})`;
+  usersBtn.textContent = `👥 (${count})`;
 }
-updateChatBtn();
-chatBtn.onclick = () => {
+updateUsersBtn();
+usersBtn.onclick = () => {
   if (!localStorage.getItem('chatName')) {
     const newName = prompt('Choisis un pseudo') || 'Invité';
     name = newName;
     localStorage.setItem('chatName', name);
-    updateChatBtn();
     ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
   }
-  chatWrapper.classList.toggle('active');
-  if (chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink');
+  usersPanel.classList.toggle('active');
   document.querySelector('.sidebar.rooms').classList.remove('open');
-  usersPanel.classList.remove('active');
 };
-toolbar.appendChild(chatBtn);
+toolbar.appendChild(usersBtn);
 const notifBtn = document.createElement('button');
 notifBtn.className = 'cesium-button cesium-toolbar-button';
 function updateNotifBtn(){
@@ -302,8 +311,8 @@ function updateLocBtn(){
 updateLocBtn();
 locBtn.onclick = () => {
   locationState = locationState === 'all' ? 'friends' : locationState === 'friends' ? 'none' : 'all';
-  if (locationState === 'none') stopLocation();
-  else shareLocation();
+  if (locationState === 'none') { stopLocation(); }
+  else { shareLocation(); showToast('Localisation activée'); }
   updateLocBtn();
 };
 toolbar.appendChild(locBtn);
@@ -340,23 +349,9 @@ toolbar.appendChild(viewBtn);
 const homeBtn = toolbar.querySelector('.cesium-home-button');
 if (homeBtn) {
   homeBtn.addEventListener('click', () => {
-    chatWrapper.classList.remove('active');
     document.querySelector('.sidebar.rooms').classList.remove('open');
     usersPanel.classList.remove('active');
   });
-}
-
-if (window.matchMedia('(max-width:768px)').matches) {
-  const usersBtn = document.createElement('button');
-  usersBtn.className = 'cesium-button cesium-toolbar-button';
-  usersBtn.textContent = '📋';
-  usersBtn.title = 'Utilisateurs connectés';
-  usersBtn.onclick = () => {
-    usersPanel.classList.toggle('active');
-    chatWrapper.classList.remove('active');
-    document.querySelector('.sidebar.rooms').classList.remove('open');
-  };
-  toolbar.appendChild(usersBtn);
 }
 
 const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
@@ -406,6 +401,7 @@ function followGps(id){
 }
 
 function focusUser(id, uname){
+  showToast('Centrage sur ' + uname);
   const ent = locationEntities[id];
   usersPanel.classList.remove('active');
   if (ent){
@@ -759,6 +755,7 @@ function shareLocation(){
 
   const errorHandler = err => {
     console.warn('Erreur de localisation :', err.message);
+    showToast('Erreur localisation: ' + err.message);
   };
 
   // iOS Safari requires getCurrentPosition to be called directly from a user gesture
@@ -775,6 +772,7 @@ function stopLocation(){
   }
   if (ws) ws.send(JSON.stringify({type:'location_remove'}));
   removeLocation(client_id);
+  showToast('Localisation désactivée');
 }
 
 /* =========================
@@ -802,13 +800,15 @@ function connect(){
 
 
   ws.onopen = () => {
+    showToast('Connecté au chat');
     if (!name) name = localStorage.getItem('chatName') || 'Invité';
     // login première room : soit "general", soit celle de l'URL si présente
     loginRoom([...rooms.keys()][0]);
   };
 
   ws.onmessage = onmessage;
-  ws.onclose   = () => setTimeout(connect, 1500);
+  ws.onerror   = () => showToast('Erreur de connexion');
+  ws.onclose   = () => { showToast('Déconnecté du chat'); setTimeout(connect, 1500); };
 }
 
 function loginRoom(roomId){
@@ -835,7 +835,7 @@ function chooseName(){
     const newName = prompt('Votre pseudo ?') || 'Invité';
     name = newName;
     localStorage.setItem('chatName', name);
-    updateChatBtn();
+    updateUsersBtn();
     ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
   }
 }
@@ -878,6 +878,7 @@ function onmessage(e){
         // Sécurité : merge si pas de client_list
         clients[data.client_id] = {name: data.client_name, status: data.status || 'online'};
         renderUsers();
+        if (data.client_id !== client_id) showToast(`${data.client_name} s'est connecté`);
       }
       break;
     }
@@ -902,7 +903,7 @@ function onmessage(e){
       if (client_id && data.client_id == client_id) {
         name = data.client_name;
         localStorage.setItem('chatName', name);
-        updateChatBtn();
+        updateUsersBtn();
         if (locationEntities[client_id]) {
           locationEntities[client_id].label.text = name;
           locationEntities[client_id].properties.name = name;
@@ -921,12 +922,20 @@ function onmessage(e){
     case 'location': {
       addOrUpdateLocation(data);
       renderUsers();
+      if (data.client_id !== client_id) {
+        const uname = clients[data.client_id]?.name || data.client_name || 'Utilisateur';
+        showToast(`${uname} a partagé sa localisation`);
+      }
       break;
     }
 
     case 'location_remove': {
       removeLocation(data.client_id);
       renderUsers();
+      if (data.client_id !== client_id) {
+        const uname = clients[data.client_id]?.name || 'Utilisateur';
+        showToast(`${uname} a retiré sa localisation`);
+      }
       break;
     }
 
@@ -975,11 +984,10 @@ function onmessage(e){
     case 'say': {
       // Stocke ET rafraîchit si la conversation visible est concernée
       const key = storeMessage(data);
-      if (currentKey === key && chatWrapper.classList.contains('active')) {
+      if (currentKey === key) {
         renderMessages();
       } else {
         blinkTab(key);
-        chatBtn.classList.add('blink');
       }
       if (data.dm && notificationsAllowed && String(data.from_client_id) !== String(client_id) && shouldNotify(data.from_client_id)) {
         new Notification('Message privé de ' + (data.from_client_name || 'Utilisateur'), {
@@ -990,13 +998,14 @@ function onmessage(e){
     }
 
     case 'logout': {
+      const uname = clients[data.from_client_id]?.name || 'Utilisateur';
       delete clients[data.from_client_id];
       renderUsers();
+      showToast(`${uname} s'est déconnecté`);
       break;
     }
     case 'wizz': {
       alert('Wizz de ' + (clients[data.from]?.name || 'Utilisateur') + '!');
-      chatBtn.classList.add('blink');
       break;
     }
     case 'call_invite': {
@@ -1087,7 +1096,7 @@ function renderTabs(){
       div.appendChild(actions);
     }
 
-    div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); if(chatWrapper.classList.contains('active')) chatBtn.classList.remove('blink'); };
+    div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); };
     div.id = 'tab_' + k;
     t.appendChild(div);
   });
@@ -1186,7 +1195,7 @@ function renderUsers(){
 
     u.appendChild(div);
   });
-  updateChatBtn();
+  updateUsersBtn();
 }
 
 /* =========================
@@ -1235,10 +1244,8 @@ function openDM(id, username){
   if (!messages[key]) messages[key] = [];
   tabs[key] = 'DM avec ' + username;
   currentKey = key;
-  chatWrapper.classList.add('active');
   renderTabs();
   renderMessages();
-  chatBtn.classList.remove('blink');
 }
 
 function onSubmit(){
