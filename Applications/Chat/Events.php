@@ -73,7 +73,8 @@ class Events
                 ];
                 Gateway::sendToClient($client_id, json_encode($welcome_msg));
 
-                $history = ChatDb::getMessages($room_id);
+                $limit = ($room_id === 'general') ? 10 : 50;
+                $history = ChatDb::getMessages($room_id, $limit);
                 Gateway::sendToClient($client_id, json_encode([
                     'type'     => 'history',
                     'room_id'  => $room_id,
