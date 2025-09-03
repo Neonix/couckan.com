@@ -19,7 +19,7 @@ include __DIR__ . '/../../../config.php';
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Inter,Arial,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
     #cesiumContainer{position:fixed;top:0;left:0;right:0;bottom:0}
     #chatWrapper{position:fixed;left:0;right:0;bottom:0;top:auto;display:flex;height:40vh;max-height:400px;overflow:hidden;z-index:10;background:rgba(15,23,42,.7);backdrop-filter:blur(4px)}
-    #usersPanel{position:fixed;top:0;right:0;bottom:0;display:none;width:clamp(200px,20vw,340px);background:var(--panel);flex-direction:column;overflow-y:auto;z-index:10}
+    #usersPanel{position:fixed;top:44px;right:0;bottom:0;display:none;width:clamp(200px,20vw,340px);background:transparent;flex-direction:column;overflow-y:auto;z-index:10;padding:1rem}
     #usersPanel.active{display:flex}
     .cesium-viewer-toolbar{z-index:30}
     .cesium-toolbar-button{margin:2px}
@@ -125,8 +125,6 @@ include __DIR__ . '/../../../config.php';
   </div>
   <!-- Utilisateurs -->
   <aside id="usersPanel" class="sidebar users">
-    <details open>
-      <summary class="h2">👥 Utilisateurs</summary>
       <div id="users" class="list"></div>
       <select id="statusSelect" class="select" onchange="changeStatus()">
         <option value="online">🟢 En ligne</option>
@@ -134,7 +132,6 @@ include __DIR__ . '/../../../config.php';
         <option value="busy">🟠 Occupé</option>
         <option value="invisible">⚫ Invisible</option>
       </select>
-    </details>
   </aside>
   <div id="profilePopup" class="profile-popup"></div>
   <div id="callOverlay">
