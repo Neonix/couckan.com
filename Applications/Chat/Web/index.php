@@ -606,7 +606,9 @@ function createPeer(id){
   const pc = new RTCPeerConnection({iceServers: ICE_SERVERS});
 
   // Propriétés pour la négociation parfaite
-  pc._isPolite = Number(client_id) < Number(id);
+  const selfIdNum = parseInt(client_id, 16);
+  const peerIdNum = parseInt(id, 16);
+  pc._isPolite = selfIdNum < peerIdNum;
   pc._makingOffer = false;
   pc._ignoreOffer = false;
 
