@@ -181,6 +181,7 @@ const locationShared = {}; // track which users already triggered a location toa
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
 let micEnabled = true, videoEnabled = true;
+let wakeLock = null;
 
 function showCallError(msg){
   document.getElementById('callError').textContent = msg || '';
@@ -315,6 +316,7 @@ notifBtn.onclick = () => {
     }
   }
   updateNotifBtn();
+  showToast(notifBtn.title);
 };
 toolbar.appendChild(notifBtn);
 const locBtn = document.createElement('button');
@@ -366,6 +368,43 @@ viewBtn.onclick = () => {
   updateViewBtn();
 };
 toolbar.appendChild(viewBtn);
+
+const wakeBtn = document.createElement('button');
+wakeBtn.className = 'cesium-button cesium-toolbar-button';
+function updateWakeBtn(){
+  if (wakeLock) { wakeBtn.textContent = '🔆'; wakeBtn.title = "Écran toujours allumé"; }
+  else { wakeBtn.textContent = '😴'; wakeBtn.title = "Laisser l'écran s'éteindre"; }
+}
+updateWakeBtn();
+
+async function requestWakeLock(){
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; updateWakeBtn(); });
+    updateWakeBtn();
+    showToast("Écran toujours allumé activé");
+  } catch(err){
+    console.error('wakeLock', err);
+    showToast('Wake Lock non disponible');
+  }
+}
+function releaseWakeLock(){
+  if (wakeLock){
+    wakeLock.release();
+    wakeLock = null;
+  }
+  updateWakeBtn();
+  showToast("Écran toujours allumé désactivé");
+}
+wakeBtn.onclick = () => {
+  if (!('wakeLock' in navigator)) { showToast('Wake Lock non supporté'); return; }
+  if (wakeLock) releaseWakeLock();
+  else requestWakeLock();
+};
+document.addEventListener('visibilitychange', () => {
+  if (wakeLock && document.visibilityState === 'visible') requestWakeLock();
+});
+toolbar.appendChild(wakeBtn);
 
 const startOverlay = document.getElementById('startOverlay');
 document.getElementById('watchBtn').onclick = () => {
@@ -802,6 +841,9 @@ function shareLocation(){
     locationWatchId = null;
   }
   hasFlownToLocation = false;
+  if ('wakeLock' in navigator && !wakeLock) {
+    requestWakeLock();
+  }
 
   const options = {
     enableHighAccuracy: true,
@@ -839,6 +881,9 @@ function stopLocation(){
   if (locationWatchId !== null) {
     navigator.geolocation.clearWatch(locationWatchId);
     locationWatchId = null;
+  }
+  if (wakeLock) {
+    releaseWakeLock();
   }
   if (ws) ws.send(JSON.stringify({type:'location_remove'}));
   removeLocation(client_id);
