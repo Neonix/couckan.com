@@ -175,7 +175,7 @@ let ws, name, client_id = storedId, status = 'online', clients = {};
 const clientsByRoom = {};
 const locationsByRoom = {};
 const joinedRooms = new Set();
-let locationWatchId = null, hasFlownToLocation = false, pendingLocationMsg = null, myZoom = 1000000;
+let locationWatchId = null, hasFlownToLocation = false, pendingLocationMsg = null, myZoom = 1000000, lastPosition = null;
 let notifState = (typeof Notification !== 'undefined' && Notification.permission === 'granted') ? 'all' : 'none',
     locationState = 'none',
     viewState = 'new';
@@ -294,7 +294,7 @@ usersBtn.onclick = () => {
     const newName = prompt('Choisis un pseudo') || 'Invité';
     name = newName;
     localStorage.setItem('chatName', name);
-    ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'rename', client_name:name}));
   }
   usersPanel.classList.toggle('active');
 };
@@ -490,13 +490,13 @@ function toggleUserNotif(id){
 }
 
 function wizz(id){
-  if (ws) ws.send(JSON.stringify({type:'wizz', to:id}));
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'wizz', to:id}));
 }
 
 function startCall(id, video){
   if (!client_id) return;
   const room = client_id < id ? `call_${client_id}_${id}` : `call_${id}_${client_id}`;
-  ws.send(JSON.stringify({type:'call_invite', to:id, room, video}));
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'call_invite', to:id, room, video}));
   joinCall(room, video);
 }
 
@@ -817,6 +817,7 @@ function shareLocation(){
 
   const sendPosition = pos => {
     const {latitude, longitude} = pos.coords;
+    lastPosition = {lat: latitude, lon: longitude};
     if (!hasFlownToLocation) {
       viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, myZoom)});
       hasFlownToLocation = true;
@@ -825,7 +826,9 @@ function shareLocation(){
       showToast(pendingLocationMsg);
       pendingLocationMsg = null;
     }
-    ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
+    }
   };
 
   const errorHandler = err => {
@@ -846,7 +849,8 @@ function stopLocation(){
     navigator.geolocation.clearWatch(locationWatchId);
     locationWatchId = null;
   }
-  if (ws) ws.send(JSON.stringify({type:'location_remove'}));
+  lastPosition = null;
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'location_remove'}));
   Object.keys(locationsByRoom).forEach(r => { if (locationsByRoom[r]) delete locationsByRoom[r][client_id]; });
   Object.keys(locationShared).forEach(r => { if (locationShared[r]) delete locationShared[r][client_id]; });
   removeLocation(client_id);
@@ -857,7 +861,6 @@ function stopLocation(){
    SOCKET
 ========================= */
 
-//  ws = new WebSocket('wss://' + document.domain + ':7272');
 function connect(){
 
   <?php
@@ -876,21 +879,34 @@ function connect(){
   }
   ?>
 
-
   ws.onopen = () => {
     showToast('Connecté au chat');
     if (!name) name = localStorage.getItem('chatName') || 'Invité';
-    const firstRoom = [...rooms.keys()][0];
-    currentKey = 'room_' + firstRoom;
-    renderTabs();
-    renderMessages();
-    // login première room : soit "general", soit celle de l'URL si présente
-    loginRoom(firstRoom);
+    if (joinedRooms.size === 0) {
+      const firstRoom = [...rooms.keys()][0];
+      currentKey = 'room_' + firstRoom;
+      renderTabs();
+      renderMessages();
+      loginRoom(firstRoom);
+    } else {
+      const roomsToReconnect = Array.from(joinedRooms);
+      const active = currentRoomId || roomsToReconnect[0];
+      joinedRooms.clear();
+      clients = {};
+      for (const k in clientsByRoom) delete clientsByRoom[k];
+      for (const k in locationsByRoom) delete locationsByRoom[k];
+      for (const k in locationShared) delete locationShared[k];
+      roomsToReconnect.forEach(r => { if (r !== active) loginRoom(r, true, true); });
+      loginRoom(active, true);
+    }
+    if (lastPosition && locationWatchId !== null && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({type:'location', lat:lastPosition.lat, lon:lastPosition.lon}));
+    }
   };
 
   ws.onmessage = onmessage;
   ws.onerror   = () => showToast('Erreur de connexion');
-  ws.onclose   = () => { showToast('Déconnecté du chat'); setTimeout(connect, 1500); };
+  ws.onclose   = () => { showToast('Déconnecté du chat'); ws = null; setTimeout(connect, 1500); };
 }
 
 function switchRoom(roomId){
@@ -906,22 +922,29 @@ function switchRoom(roomId){
   for (const id in locs) addOrUpdateLocation(locs[id]);
 }
 
-function loginRoom(roomId){
-  if (joinedRooms.has(roomId)) {
-    switchRoom(roomId);
-    renderTabs();
-    renderMessages();
+function loginRoom(roomId, force=false, stay=false){
+  const already = joinedRooms.has(roomId);
+  if (already && !force){
+    if (!stay){
+      switchRoom(roomId);
+      renderTabs();
+      renderMessages();
+    }
     return;
   }
   joinedRooms.add(roomId);
-  showToast('Vous entrez dans la salle ' + roomId);
   clientsByRoom[roomId] = clientsByRoom[roomId] || {};
   locationsByRoom[roomId] = locationsByRoom[roomId] || {};
   locationShared[roomId] = locationShared[roomId] || {};
-  switchRoom(roomId);
-  renderTabs();
-  renderMessages();
-  ws.send(JSON.stringify({type:'login', client_name:name, room_id:roomId, status, ua: navigator.userAgent, client_uuid: client_id}));
+  if (!stay){
+    showToast(already ? ('Reconnecté à la salle ' + roomId) : ('Vous entrez dans la salle ' + roomId));
+    switchRoom(roomId);
+    renderTabs();
+    renderMessages();
+  }
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({type:'login', client_name:name, room_id:roomId, status, ua: navigator.userAgent, client_uuid: client_id}));
+  }
 }
 
 function changeStatus(){
@@ -937,7 +960,7 @@ function changeStatus(){
       locationEntities[client_id].point.color = statusColors[status] || Cesium.Color.CYAN;
     }
   }
-  ws.send(JSON.stringify({type:'status', status}));
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'status', status}));
 }
 
 function chooseName(){
@@ -954,7 +977,7 @@ function chooseName(){
       clients = clientsByRoom[currentRoomId] || {};
       renderUsers();
     }
-    ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'rename', client_name:name}));
   }
 }
 
@@ -966,7 +989,7 @@ function onmessage(e){
 
   switch (data.type){
     case 'ping':
-      ws.send(JSON.stringify({type:'pong'}));
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'pong'}));
       break;
 
     case 'welcome': {
@@ -1311,11 +1334,13 @@ function createRoom(){
   renderRooms();
 
   // Serveur
-  ws.send(JSON.stringify({
-    type: 'create_room',
-    room_id: roomId,
-    visibility: isPrivate ? 'private' : 'public'
-  }));
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'create_room',
+      room_id: roomId,
+      visibility: isPrivate ? 'private' : 'public'
+    }));
+  }
 
   // Publique : on bascule tout de suite
   if (!isPrivate) {
@@ -1333,7 +1358,7 @@ function createRoom(){
 function closeRoom(roomId){
   const meta = rooms.get(roomId);
   if (!meta || !client_id || meta.creator_id != client_id) return;
-  ws.send(JSON.stringify({type:'close_room', room_id:roomId, creator_id:client_id}));
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'close_room', room_id:roomId, creator_id:client_id}));
 
   // remove room locally so the tab closes immediately
   const key = 'room_' + roomId;
@@ -1534,7 +1559,11 @@ function onSubmit(){
     msg.room_id = currentKey.replace('room_', '');
   }
 
-  ws.send(JSON.stringify(msg));
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(msg));
+  } else {
+    showToast('Connexion perdue, message non envoyé');
+  }
 
   // pas d’ajout local ici -> serveur renvoie UNE fois (évite doublons)
   ta.value = '';
