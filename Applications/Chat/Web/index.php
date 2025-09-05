@@ -739,6 +739,7 @@ function shouldNotify(id){
 
 // conversations: "room_<roomId>" ou "dm_<clientId>"
 let currentKey = 'room_general';
+let currentRoomId = null;
 let messages   = { room_general: [] };
 let tabs       = { room_general: 'Salle générale' };
 let lastRenderedKey = null;
@@ -874,8 +875,12 @@ function connect(){
   ws.onopen = () => {
     showToast('Connecté au chat');
     if (!name) name = localStorage.getItem('chatName') || 'Invité';
+    const firstRoom = [...rooms.keys()][0];
+    currentKey = 'room_' + firstRoom;
+    renderTabs();
+    renderMessages();
     // login première room : soit "general", soit celle de l'URL si présente
-    loginRoom([...rooms.keys()][0]);
+    loginRoom(firstRoom);
   };
 
   ws.onmessage = onmessage;
@@ -884,6 +889,11 @@ function connect(){
 }
 
 function loginRoom(roomId){
+  if (roomId === currentRoomId) return;
+  if (currentRoomId) showToast('Vous quittez la salle ' + currentRoomId);
+  showToast('Vous entrez dans la salle ' + roomId);
+  currentRoomId = roomId;
+
   // reset UI utilisateurs (évite l'affichage d'une ancienne liste avant le "welcome")
   clients = {};
   renderUsers();
@@ -934,6 +944,7 @@ function onmessage(e){
       client_id = data.self_id;
       localStorage.setItem('chatUid', client_id);
       clients = data.client_list || {};
+      currentRoomId = data.room_id;
       renderUsers();
 
       // S’assure que l’onglet de la room existe et devient actif
@@ -1202,7 +1213,15 @@ function renderTabs(){
       div.appendChild(actions);
     }
 
-    div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); chatToggle.classList.remove('blink'); if (notifKey === k) notifKey = null; };
+    div.onclick = () => {
+      currentKey = k;
+      renderTabs();
+      renderMessages();
+      clearBlink(k);
+      chatToggle.classList.remove('blink');
+      if (notifKey === k) notifKey = null;
+      if (k.startsWith('room_')) loginRoom(k.substring(5));
+    };
     div.id = 'tab_' + k;
     t.appendChild(div);
   });

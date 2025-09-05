@@ -29,7 +29,24 @@ class Events
                 $client_name = htmlspecialchars($data['client_name'] ?? 'Invité');
                 $status      = $data['status']     ?? 'online';
                 $ua          = $data['ua']         ?? '';
-                $client_uuid = $data['client_uuid'] ?? bin2hex(random_bytes(8));
+                $client_uuid = $data['client_uuid'] ?? ($_SESSION['client_uuid'] ?? bin2hex(random_bytes(8)));
+
+                // Quitte l'ancienne room si nécessaire
+                $old_room = $_SESSION['room_id'] ?? null;
+                if ($old_room && $old_room !== $room_id) {
+                    $uuid = $_SESSION['client_uuid'] ?? $client_uuid;
+                    $logout = [
+                        'type'             => 'logout',
+                        'from_client_id'   => $uuid,
+                        'from_client_name' => $_SESSION['client_name'] ?? 'Invité',
+                        'time'             => date('Y-m-d H:i:s'),
+                    ];
+                    Gateway::sendToGroup($old_room, json_encode($logout));
+                    if (isset(self::$locations[$uuid]) && (self::$locations[$uuid]['room_id'] ?? null) === $old_room) {
+                        Gateway::sendToGroup($old_room, json_encode(['type'=>'location_remove','client_id'=>$uuid]));
+                    }
+                    Gateway::leaveGroup($client_id, $old_room);
+                }
 
                 // Remplit la session avant joinGroup pour que getClientSessionsByGroup voie status/name
                 $_SESSION['room_id']     = $room_id;
@@ -290,7 +307,7 @@ class Events
              *  - Room : broadcast à la room courante
              */
             case 'say': {
-                $room_id     = $_SESSION['room_id'] ?? 'general';
+                $room_id     = $data['room_id'] ?? ($_SESSION['room_id'] ?? 'general');
                 $client_name = $_SESSION['client_name'] ?? 'Invité';
                 $content     = nl2br(htmlspecialchars($data['content'] ?? ''));
                 $uuid        = $_SESSION['client_uuid'] ?? $client_id;
