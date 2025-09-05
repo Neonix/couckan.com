@@ -172,12 +172,15 @@ function getUserMedia(constraints){
 
 const storedId = localStorage.getItem('chatUid');
 let ws, name, client_id = storedId, status = 'online', clients = {};
-let locationWatchId = null, hasFlownToLocation = false, pendingLocationMsg = null, myZoom = 1000000;
+const clientsByRoom = {};
+const locationsByRoom = {};
+const joinedRooms = new Set();
+let locationWatchId = null, hasFlownToLocation = false, pendingLocationMsg = null, myZoom = 1000000, lastPosition = null;
 let notifState = (typeof Notification !== 'undefined' && Notification.permission === 'granted') ? 'all' : 'none',
     locationState = 'none',
     viewState = 'new';
 const mutedUsers = new Set();
-const locationShared = {}; // track which users already triggered a location toast
+const locationShared = {}; // {roomId: {clientId: bool}}
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
 let micEnabled = true, videoEnabled = true;
@@ -291,7 +294,7 @@ usersBtn.onclick = () => {
     const newName = prompt('Choisis un pseudo') || 'Invité';
     name = newName;
     localStorage.setItem('chatName', name);
-    ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'rename', client_name:name}));
   }
   usersPanel.classList.toggle('active');
 };
@@ -487,13 +490,13 @@ function toggleUserNotif(id){
 }
 
 function wizz(id){
-  if (ws) ws.send(JSON.stringify({type:'wizz', to:id}));
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'wizz', to:id}));
 }
 
 function startCall(id, video){
   if (!client_id) return;
   const room = client_id < id ? `call_${client_id}_${id}` : `call_${id}_${client_id}`;
-  ws.send(JSON.stringify({type:'call_invite', to:id, room, video}));
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'call_invite', to:id, room, video}));
   joinCall(room, video);
 }
 
@@ -739,6 +742,7 @@ function shouldNotify(id){
 
 // conversations: "room_<roomId>" ou "dm_<clientId>"
 let currentKey = 'room_general';
+let currentRoomId = null;
 let messages   = { room_general: [] };
 let tabs       = { room_general: 'Salle générale' };
 let lastRenderedKey = null;
@@ -813,6 +817,7 @@ function shareLocation(){
 
   const sendPosition = pos => {
     const {latitude, longitude} = pos.coords;
+    lastPosition = {lat: latitude, lon: longitude};
     if (!hasFlownToLocation) {
       viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, myZoom)});
       hasFlownToLocation = true;
@@ -821,7 +826,9 @@ function shareLocation(){
       showToast(pendingLocationMsg);
       pendingLocationMsg = null;
     }
-    ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({type:'location', lat: latitude, lon: longitude}));
+    }
   };
 
   const errorHandler = err => {
@@ -842,7 +849,10 @@ function stopLocation(){
     navigator.geolocation.clearWatch(locationWatchId);
     locationWatchId = null;
   }
-  if (ws) ws.send(JSON.stringify({type:'location_remove'}));
+  lastPosition = null;
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'location_remove'}));
+  Object.keys(locationsByRoom).forEach(r => { if (locationsByRoom[r]) delete locationsByRoom[r][client_id]; });
+  Object.keys(locationShared).forEach(r => { if (locationShared[r]) delete locationShared[r][client_id]; });
   removeLocation(client_id);
   showToast('Localisation désactivée');
 }
@@ -851,7 +861,6 @@ function stopLocation(){
    SOCKET
 ========================= */
 
-//  ws = new WebSocket('wss://' + document.domain + ':7272');
 function connect(){
 
   <?php
@@ -870,36 +879,88 @@ function connect(){
   }
   ?>
 
-
   ws.onopen = () => {
     showToast('Connecté au chat');
     if (!name) name = localStorage.getItem('chatName') || 'Invité';
-    // login première room : soit "general", soit celle de l'URL si présente
-    loginRoom([...rooms.keys()][0]);
+    if (joinedRooms.size === 0) {
+      const firstRoom = [...rooms.keys()][0];
+      currentKey = 'room_' + firstRoom;
+      renderTabs();
+      renderMessages();
+      loginRoom(firstRoom);
+    } else {
+      const roomsToReconnect = Array.from(joinedRooms);
+      const active = currentRoomId || roomsToReconnect[0];
+      joinedRooms.clear();
+      clients = {};
+      for (const k in clientsByRoom) delete clientsByRoom[k];
+      for (const k in locationsByRoom) delete locationsByRoom[k];
+      for (const k in locationShared) delete locationShared[k];
+      roomsToReconnect.forEach(r => { if (r !== active) loginRoom(r, true, true); });
+      loginRoom(active, true);
+    }
+    if (lastPosition && locationWatchId !== null && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({type:'location', lat:lastPosition.lat, lon:lastPosition.lon}));
+    }
   };
 
   ws.onmessage = onmessage;
   ws.onerror   = () => showToast('Erreur de connexion');
-  ws.onclose   = () => { showToast('Déconnecté du chat'); setTimeout(connect, 1500); };
+  ws.onclose   = () => { showToast('Déconnecté du chat'); ws = null; setTimeout(connect, 1500); };
 }
 
-function loginRoom(roomId){
-  // reset UI utilisateurs (évite l'affichage d'une ancienne liste avant le "welcome")
-  clients = {};
+function switchRoom(roomId){
+  currentRoomId = roomId;
+  clients = clientsByRoom[roomId] || {};
+  locationShared[roomId] = locationShared[roomId] || {};
   renderUsers();
-  ws.send(JSON.stringify({type:'login', client_name:name, room_id:roomId, status, ua: navigator.userAgent, client_uuid: client_id}));
+  Object.keys(locationEntities).forEach(id => {
+    viewer.entities.remove(locationEntities[id]);
+    delete locationEntities[id];
+  });
+  const locs = locationsByRoom[roomId] || {};
+  for (const id in locs) addOrUpdateLocation(locs[id]);
+}
+
+function loginRoom(roomId, force=false, stay=false){
+  const already = joinedRooms.has(roomId);
+  if (already && !force){
+    if (!stay){
+      switchRoom(roomId);
+      renderTabs();
+      renderMessages();
+    }
+    return;
+  }
+  joinedRooms.add(roomId);
+  clientsByRoom[roomId] = clientsByRoom[roomId] || {};
+  locationsByRoom[roomId] = locationsByRoom[roomId] || {};
+  locationShared[roomId] = locationShared[roomId] || {};
+  if (!stay){
+    showToast(already ? ('Reconnecté à la salle ' + roomId) : ('Vous entrez dans la salle ' + roomId));
+    switchRoom(roomId);
+    renderTabs();
+    renderMessages();
+  }
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({type:'login', client_name:name, room_id:roomId, status, ua: navigator.userAgent, client_uuid: client_id}));
+  }
 }
 
 function changeStatus(){
   status = document.getElementById('statusSelect').value;
-  if (client_id && clients[client_id]) {
-    clients[client_id].status = status;
+  if (client_id) {
+    joinedRooms.forEach(r => {
+      if (!clientsByRoom[r]) clientsByRoom[r] = {};
+      if (clientsByRoom[r][client_id]) clientsByRoom[r][client_id].status = status;
+    });
+    clients = clientsByRoom[currentRoomId] || {};
     renderUsers();
     if (locationEntities[client_id]) {
       locationEntities[client_id].point.color = statusColors[status] || Cesium.Color.CYAN;
     }
   }
-  ws.send(JSON.stringify({type:'status', status}));
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'status', status}));
 }
 
 function chooseName(){
@@ -908,7 +969,15 @@ function chooseName(){
     name = newName;
     localStorage.setItem('chatName', name);
     updateUsersBtn();
-    ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
+    if (client_id) {
+      joinedRooms.forEach(r => {
+        if (!clientsByRoom[r]) clientsByRoom[r] = {};
+        if (clientsByRoom[r][client_id]) clientsByRoom[r][client_id].name = name;
+      });
+      clients = clientsByRoom[currentRoomId] || {};
+      renderUsers();
+    }
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'rename', client_name:name}));
   }
 }
 
@@ -920,17 +989,17 @@ function onmessage(e){
 
   switch (data.type){
     case 'ping':
-      ws.send(JSON.stringify({type:'pong'}));
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'pong'}));
       break;
 
     case 'welcome': {
-      // Fixe mon id et remplace la liste utilisateurs par celle de la room
       client_id = data.self_id;
       localStorage.setItem('chatUid', client_id);
-      clients = data.client_list || {};
-      renderUsers();
-
-      // S’assure que l’onglet de la room existe et devient actif
+      clientsByRoom[data.room_id] = data.client_list || {};
+      if (currentRoomId === data.room_id) {
+        clients = clientsByRoom[data.room_id];
+        renderUsers();
+      }
       ensureRoomTab(data.room_id);
       renderRooms();
       break;
@@ -942,76 +1011,112 @@ function onmessage(e){
     }
 
     case 'login': {
-      // Quand quelqu’un arrive, on reçoit une liste à jour pour la room
+      const roomId = data.room_id;
       if (data.client_list) {
-        clients = data.client_list;
-        renderUsers();
+        clientsByRoom[roomId] = data.client_list;
+        if (roomId === currentRoomId) {
+          clients = clientsByRoom[roomId];
+          renderUsers();
+        }
       } else if (data.client_id && data.client_name) {
-        // Sécurité : merge si pas de client_list
-        clients[data.client_id] = {name: data.client_name, status: data.status || 'online'};
-        renderUsers();
-        if (data.client_id !== client_id) showToast(`${data.client_name} s'est connecté`);
+        if (!clientsByRoom[roomId]) clientsByRoom[roomId] = {};
+        clientsByRoom[roomId][data.client_id] = {name: data.client_name, status: data.status || 'online'};
+        if (roomId === currentRoomId) {
+          clients = clientsByRoom[roomId];
+          renderUsers();
+          if (data.client_id !== client_id) showToast(`${data.client_name} s'est connecté`);
+        }
       }
       break;
     }
 
     case 'status': {
-      // MAJ statut en temps réel
-      if (!clients[data.client_id]) clients[data.client_id] = {name:'Utilisateur', status:data.status};
-      clients[data.client_id].status = data.status;
-      renderUsers();
-      if (locationEntities[data.client_id]) {
-        locationEntities[data.client_id].point.color = statusColors[data.status] || Cesium.Color.CYAN;
+      const roomId = data.room_id;
+      if (!clientsByRoom[roomId]) clientsByRoom[roomId] = {};
+      if (!clientsByRoom[roomId][data.client_id]) clientsByRoom[roomId][data.client_id] = {name:'Utilisateur', status:data.status};
+      clientsByRoom[roomId][data.client_id].status = data.status;
+      if (roomId === currentRoomId) {
+        clients = clientsByRoom[roomId];
+        renderUsers();
+        if (locationEntities[data.client_id]) {
+          locationEntities[data.client_id].point.color = statusColors[data.status] || Cesium.Color.CYAN;
+        }
       }
       break;
     }
 
     case 'rename': {
-      if (!clients[data.client_id]) {
-        clients[data.client_id] = {name: data.client_name || 'Invité', status: 'online'};
+      const roomId = data.room_id;
+      if (!clientsByRoom[roomId]) clientsByRoom[roomId] = {};
+      if (!clientsByRoom[roomId][data.client_id]) {
+        clientsByRoom[roomId][data.client_id] = {name: data.client_name || 'Invité', status: 'online'};
       } else {
-        clients[data.client_id].name = data.client_name || 'Invité';
+        clientsByRoom[roomId][data.client_id].name = data.client_name || 'Invité';
       }
       if (client_id && data.client_id == client_id) {
         name = data.client_name;
         localStorage.setItem('chatName', name);
         updateUsersBtn();
+        joinedRooms.forEach(r => {
+          if (clientsByRoom[r] && clientsByRoom[r][client_id]) {
+            clientsByRoom[r][client_id].name = name;
+          }
+        });
         if (locationEntities[client_id]) {
           locationEntities[client_id].label.text = name;
           locationEntities[client_id].properties.name = name;
         }
       }
-      renderUsers();
+      if (roomId === currentRoomId) {
+        clients = clientsByRoom[roomId];
+        renderUsers();
+      }
       break;
     }
 
     case 'locations': {
-      (data.locations || []).forEach(l => addOrUpdateLocation(l));
-      renderUsers();
+      const roomId = data.room_id;
+      locationsByRoom[roomId] = {};
+      (data.locations || []).forEach(l => {
+        locationsByRoom[roomId][l.client_id] = l;
+        if (roomId === currentRoomId) addOrUpdateLocation(l);
+      });
+      if (roomId === currentRoomId) renderUsers();
       break;
     }
 
     case 'location': {
-      addOrUpdateLocation(data);
-      renderUsers();
-      if (data.client_id !== client_id) {
-        const uname = clients[data.client_id]?.name || data.client_name || 'Utilisateur';
-        if (!locationShared[data.client_id]) {
-          showToast(`${uname} a partagé sa localisation`);
-          locationShared[data.client_id] = true;
+      const roomId = data.room_id;
+      locationsByRoom[roomId] = locationsByRoom[roomId] || {};
+      locationsByRoom[roomId][data.client_id] = data;
+      if (roomId === currentRoomId) {
+        addOrUpdateLocation(data);
+        renderUsers();
+        if (data.client_id !== client_id) {
+          const uname = clientsByRoom[roomId]?.[data.client_id]?.name || data.client_name || 'Utilisateur';
+          const ls = locationShared[roomId] || (locationShared[roomId] = {});
+          if (!ls[data.client_id]) {
+            showToast(`${uname} a partagé sa localisation`);
+            ls[data.client_id] = true;
+          }
         }
       }
       break;
     }
 
     case 'location_remove': {
-      removeLocation(data.client_id);
-      renderUsers();
-      if (data.client_id !== client_id) {
-        const uname = clients[data.client_id]?.name || 'Utilisateur';
-        if (locationShared[data.client_id]) {
-          showToast(`${uname} a retiré sa localisation`);
-          locationShared[data.client_id] = false;
+      const roomId = data.room_id;
+      if (locationsByRoom[roomId]) delete locationsByRoom[roomId][data.client_id];
+      if (roomId === currentRoomId) {
+        removeLocation(data.client_id);
+        renderUsers();
+        if (data.client_id !== client_id) {
+          const uname = clientsByRoom[roomId]?.[data.client_id]?.name || 'Utilisateur';
+          const ls = locationShared[roomId];
+          if (ls && ls[data.client_id]) {
+            showToast(`${uname} a retiré sa localisation`);
+            ls[data.client_id] = false;
+          }
         }
       }
       break;
@@ -1103,19 +1208,27 @@ function onmessage(e){
     }
 
     case 'logout': {
-      const uname = clients[data.from_client_id]?.name || 'Utilisateur';
-      delete clients[data.from_client_id];
-      renderUsers();
-      delete locationShared[data.from_client_id];
-      showToast(`${uname} s'est déconnecté`);
+      const roomId = data.room_id;
+      const uname = clientsByRoom[roomId]?.[data.from_client_id]?.name || 'Utilisateur';
+      if (clientsByRoom[roomId]) delete clientsByRoom[roomId][data.from_client_id];
+      if (locationsByRoom[roomId]) delete locationsByRoom[roomId][data.from_client_id];
+      if (roomId === currentRoomId) {
+        removeLocation(data.from_client_id);
+        clients = clientsByRoom[roomId] || {};
+        renderUsers();
+        if (locationShared[roomId]) delete locationShared[roomId][data.from_client_id];
+        showToast(`${uname} s'est déconnecté`);
+      }
       break;
     }
     case 'wizz': {
-      alert('Wizz de ' + (clients[data.from]?.name || 'Utilisateur') + '!');
+      const uname = Object.values(clientsByRoom).reduce((n,r) => n || r[data.from]?.name, undefined) || 'Utilisateur';
+      alert('Wizz de ' + uname + '!');
       break;
     }
     case 'call_invite': {
-      if (confirm('Rejoindre l\'appel ' + (data.video ? 'video' : 'audio') + ' de ' + (clients[data.from]?.name || 'Utilisateur') + ' ?')) {
+      const uname = Object.values(clientsByRoom).reduce((n,r) => n || r[data.from]?.name, undefined) || 'Utilisateur';
+      if (confirm('Rejoindre l\'appel ' + (data.video ? 'video' : 'audio') + ' de ' + uname + ' ?')) {
         joinCall(data.room, data.video);
       }
       break;
@@ -1196,7 +1309,15 @@ function renderTabs(){
       div.appendChild(actions);
     }
 
-    div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); chatToggle.classList.remove('blink'); if (notifKey === k) notifKey = null; };
+    div.onclick = () => {
+      currentKey = k;
+      renderTabs();
+      renderMessages();
+      clearBlink(k);
+      chatToggle.classList.remove('blink');
+      if (notifKey === k) notifKey = null;
+      if (k.startsWith('room_')) loginRoom(k.substring(5));
+    };
     div.id = 'tab_' + k;
     t.appendChild(div);
   });
@@ -1213,11 +1334,13 @@ function createRoom(){
   renderRooms();
 
   // Serveur
-  ws.send(JSON.stringify({
-    type: 'create_room',
-    room_id: roomId,
-    visibility: isPrivate ? 'private' : 'public'
-  }));
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'create_room',
+      room_id: roomId,
+      visibility: isPrivate ? 'private' : 'public'
+    }));
+  }
 
   // Publique : on bascule tout de suite
   if (!isPrivate) {
@@ -1235,7 +1358,7 @@ function createRoom(){
 function closeRoom(roomId){
   const meta = rooms.get(roomId);
   if (!meta || !client_id || meta.creator_id != client_id) return;
-  ws.send(JSON.stringify({type:'close_room', room_id:roomId, creator_id:client_id}));
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({type:'close_room', room_id:roomId, creator_id:client_id}));
 
   // remove room locally so the tab closes immediately
   const key = 'room_' + roomId;
@@ -1436,7 +1559,11 @@ function onSubmit(){
     msg.room_id = currentKey.replace('room_', '');
   }
 
-  ws.send(JSON.stringify(msg));
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(msg));
+  } else {
+    showToast('Connexion perdue, message non envoyé');
+  }
 
   // pas d’ajout local ici -> serveur renvoie UNE fois (évite doublons)
   ta.value = '';
