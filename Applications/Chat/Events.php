@@ -94,18 +94,19 @@ class Events
                 self::$locations[$client_uuid] = [
                     'client_id'   => $client_uuid,
                     'client_name' => $client_name,
+                    'room_id'     => $room_id,
                     'lat'         => $randLat,
                     'lon'         => $randLon,
                     'real'        => false,
                 ];
                 $loc = self::$locations[$client_uuid];
                 $loc['type'] = 'location';
-                Gateway::sendToAll(json_encode($loc));
+                Gateway::sendToGroup($room_id, json_encode($loc));
 
-                // récupère les positions de tous les clients connectés
-                $all_sessions = Gateway::getAllClientSessions();
+                // récupère les positions des clients dans la même room
+                $sessions = Gateway::getClientSessionsByGroup($room_id);
                 $locations = [];
-                foreach ($all_sessions as $id => $sess) {
+                foreach ($sessions as $id => $sess) {
                     if (!isset($sess['lat'], $sess['lon'])) {
                         continue;
                     }
@@ -161,7 +162,7 @@ class Events
                     self::$locations[$uuid]['client_name'] = $new;
                     $loc = self::$locations[$uuid];
                     $loc['type'] = 'location';
-                    Gateway::sendToAll(json_encode($loc));
+                    Gateway::sendToGroup($loc['room_id'] ?? $room_id, json_encode($loc));
                 }
                 return;
             }
@@ -172,9 +173,11 @@ class Events
                 if ($lat === null || $lon === null) return;
                 $client_name = $_SESSION['client_name'] ?? 'Invité';
                 $uuid = $_SESSION['client_uuid'] ?? $client_id;
+                $room_id = $_SESSION['room_id'] ?? 'general';
                 self::$locations[$uuid] = [
                     'client_id'   => $uuid,
                     'client_name' => $client_name,
+                    'room_id'     => $room_id,
                     'lat'         => (float)$lat,
                     'lon'         => (float)$lon,
                     'real'        => true,
@@ -184,17 +187,18 @@ class Events
                 $_SESSION['real'] = true;
                 $msg = self::$locations[$uuid];
                 $msg['type'] = 'location';
-                Gateway::sendToAll(json_encode($msg));
+                Gateway::sendToGroup($room_id, json_encode($msg));
                 return;
             }
 
             case 'location_remove': {
                 $uuid = $_SESSION['client_uuid'] ?? $client_id;
                 if (isset(self::$locations[$uuid])) {
+                    $room_id = self::$locations[$uuid]['room_id'] ?? ($_SESSION['room_id'] ?? 'general');
                     unset(self::$locations[$uuid]);
                     unset($_SESSION['lat'], $_SESSION['lon']);
                     $_SESSION['real'] = false;
-                    Gateway::sendToAll(json_encode(['type'=>'location_remove','client_id'=>$uuid]));
+                    Gateway::sendToGroup($room_id, json_encode(['type'=>'location_remove','client_id'=>$uuid]));
                 }
                 return;
             }
@@ -341,8 +345,9 @@ class Events
             Gateway::sendToGroup($room_id, json_encode($msg));
         }
         if (isset(self::$locations[$uuid])) {
+            $room_id = self::$locations[$uuid]['room_id'] ?? ($_SESSION['room_id'] ?? 'general');
             unset(self::$locations[$uuid]);
-            Gateway::sendToAll(json_encode(['type'=>'location_remove','client_id'=>$uuid]));
+            Gateway::sendToGroup($room_id, json_encode(['type'=>'location_remove','client_id'=>$uuid]));
         }
     }
 }

@@ -887,6 +887,12 @@ function loginRoom(roomId){
   // reset UI utilisateurs (évite l'affichage d'une ancienne liste avant le "welcome")
   clients = {};
   renderUsers();
+  // reset localisation des anciens salons
+  Object.keys(locationEntities).forEach(id => {
+    viewer.entities.remove(locationEntities[id]);
+    delete locationEntities[id];
+  });
+  Object.keys(locationShared).forEach(id => delete locationShared[id]);
   ws.send(JSON.stringify({type:'login', client_name:name, room_id:roomId, status, ua: navigator.userAgent, client_uuid: client_id}));
 }
 
