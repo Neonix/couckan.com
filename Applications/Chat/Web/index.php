@@ -172,12 +172,15 @@ function getUserMedia(constraints){
 
 const storedId = localStorage.getItem('chatUid');
 let ws, name, client_id = storedId, status = 'online', clients = {};
+const clientsByRoom = {};
+const locationsByRoom = {};
+const joinedRooms = new Set();
 let locationWatchId = null, hasFlownToLocation = false, pendingLocationMsg = null, myZoom = 1000000;
 let notifState = (typeof Notification !== 'undefined' && Notification.permission === 'granted') ? 'all' : 'none',
     locationState = 'none',
     viewState = 'new';
 const mutedUsers = new Set();
-const locationShared = {}; // track which users already triggered a location toast
+const locationShared = {}; // {roomId: {clientId: bool}}
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
 let micEnabled = true, videoEnabled = true;
@@ -844,6 +847,8 @@ function stopLocation(){
     locationWatchId = null;
   }
   if (ws) ws.send(JSON.stringify({type:'location_remove'}));
+  Object.keys(locationsByRoom).forEach(r => { if (locationsByRoom[r]) delete locationsByRoom[r][client_id]; });
+  Object.keys(locationShared).forEach(r => { if (locationShared[r]) delete locationShared[r][client_id]; });
   removeLocation(client_id);
   showToast('Localisation désactivée');
 }
@@ -888,28 +893,45 @@ function connect(){
   ws.onclose   = () => { showToast('Déconnecté du chat'); setTimeout(connect, 1500); };
 }
 
-function loginRoom(roomId){
-  if (roomId === currentRoomId) return;
-  if (currentRoomId) showToast('Vous quittez la salle ' + currentRoomId);
-  showToast('Vous entrez dans la salle ' + roomId);
+function switchRoom(roomId){
   currentRoomId = roomId;
-
-  // reset UI utilisateurs (évite l'affichage d'une ancienne liste avant le "welcome")
-  clients = {};
+  clients = clientsByRoom[roomId] || {};
+  locationShared[roomId] = locationShared[roomId] || {};
   renderUsers();
-  // reset localisation des anciens salons
   Object.keys(locationEntities).forEach(id => {
     viewer.entities.remove(locationEntities[id]);
     delete locationEntities[id];
   });
-  Object.keys(locationShared).forEach(id => delete locationShared[id]);
+  const locs = locationsByRoom[roomId] || {};
+  for (const id in locs) addOrUpdateLocation(locs[id]);
+}
+
+function loginRoom(roomId){
+  if (joinedRooms.has(roomId)) {
+    switchRoom(roomId);
+    renderTabs();
+    renderMessages();
+    return;
+  }
+  joinedRooms.add(roomId);
+  showToast('Vous entrez dans la salle ' + roomId);
+  clientsByRoom[roomId] = clientsByRoom[roomId] || {};
+  locationsByRoom[roomId] = locationsByRoom[roomId] || {};
+  locationShared[roomId] = locationShared[roomId] || {};
+  switchRoom(roomId);
+  renderTabs();
+  renderMessages();
   ws.send(JSON.stringify({type:'login', client_name:name, room_id:roomId, status, ua: navigator.userAgent, client_uuid: client_id}));
 }
 
 function changeStatus(){
   status = document.getElementById('statusSelect').value;
-  if (client_id && clients[client_id]) {
-    clients[client_id].status = status;
+  if (client_id) {
+    joinedRooms.forEach(r => {
+      if (!clientsByRoom[r]) clientsByRoom[r] = {};
+      if (clientsByRoom[r][client_id]) clientsByRoom[r][client_id].status = status;
+    });
+    clients = clientsByRoom[currentRoomId] || {};
     renderUsers();
     if (locationEntities[client_id]) {
       locationEntities[client_id].point.color = statusColors[status] || Cesium.Color.CYAN;
@@ -924,6 +946,14 @@ function chooseName(){
     name = newName;
     localStorage.setItem('chatName', name);
     updateUsersBtn();
+    if (client_id) {
+      joinedRooms.forEach(r => {
+        if (!clientsByRoom[r]) clientsByRoom[r] = {};
+        if (clientsByRoom[r][client_id]) clientsByRoom[r][client_id].name = name;
+      });
+      clients = clientsByRoom[currentRoomId] || {};
+      renderUsers();
+    }
     ws && ws.send(JSON.stringify({type:'rename', client_name:name}));
   }
 }
@@ -940,14 +970,13 @@ function onmessage(e){
       break;
 
     case 'welcome': {
-      // Fixe mon id et remplace la liste utilisateurs par celle de la room
       client_id = data.self_id;
       localStorage.setItem('chatUid', client_id);
-      clients = data.client_list || {};
-      currentRoomId = data.room_id;
-      renderUsers();
-
-      // S’assure que l’onglet de la room existe et devient actif
+      clientsByRoom[data.room_id] = data.client_list || {};
+      if (currentRoomId === data.room_id) {
+        clients = clientsByRoom[data.room_id];
+        renderUsers();
+      }
       ensureRoomTab(data.room_id);
       renderRooms();
       break;
@@ -959,76 +988,112 @@ function onmessage(e){
     }
 
     case 'login': {
-      // Quand quelqu’un arrive, on reçoit une liste à jour pour la room
+      const roomId = data.room_id;
       if (data.client_list) {
-        clients = data.client_list;
-        renderUsers();
+        clientsByRoom[roomId] = data.client_list;
+        if (roomId === currentRoomId) {
+          clients = clientsByRoom[roomId];
+          renderUsers();
+        }
       } else if (data.client_id && data.client_name) {
-        // Sécurité : merge si pas de client_list
-        clients[data.client_id] = {name: data.client_name, status: data.status || 'online'};
-        renderUsers();
-        if (data.client_id !== client_id) showToast(`${data.client_name} s'est connecté`);
+        if (!clientsByRoom[roomId]) clientsByRoom[roomId] = {};
+        clientsByRoom[roomId][data.client_id] = {name: data.client_name, status: data.status || 'online'};
+        if (roomId === currentRoomId) {
+          clients = clientsByRoom[roomId];
+          renderUsers();
+          if (data.client_id !== client_id) showToast(`${data.client_name} s'est connecté`);
+        }
       }
       break;
     }
 
     case 'status': {
-      // MAJ statut en temps réel
-      if (!clients[data.client_id]) clients[data.client_id] = {name:'Utilisateur', status:data.status};
-      clients[data.client_id].status = data.status;
-      renderUsers();
-      if (locationEntities[data.client_id]) {
-        locationEntities[data.client_id].point.color = statusColors[data.status] || Cesium.Color.CYAN;
+      const roomId = data.room_id;
+      if (!clientsByRoom[roomId]) clientsByRoom[roomId] = {};
+      if (!clientsByRoom[roomId][data.client_id]) clientsByRoom[roomId][data.client_id] = {name:'Utilisateur', status:data.status};
+      clientsByRoom[roomId][data.client_id].status = data.status;
+      if (roomId === currentRoomId) {
+        clients = clientsByRoom[roomId];
+        renderUsers();
+        if (locationEntities[data.client_id]) {
+          locationEntities[data.client_id].point.color = statusColors[data.status] || Cesium.Color.CYAN;
+        }
       }
       break;
     }
 
     case 'rename': {
-      if (!clients[data.client_id]) {
-        clients[data.client_id] = {name: data.client_name || 'Invité', status: 'online'};
+      const roomId = data.room_id;
+      if (!clientsByRoom[roomId]) clientsByRoom[roomId] = {};
+      if (!clientsByRoom[roomId][data.client_id]) {
+        clientsByRoom[roomId][data.client_id] = {name: data.client_name || 'Invité', status: 'online'};
       } else {
-        clients[data.client_id].name = data.client_name || 'Invité';
+        clientsByRoom[roomId][data.client_id].name = data.client_name || 'Invité';
       }
       if (client_id && data.client_id == client_id) {
         name = data.client_name;
         localStorage.setItem('chatName', name);
         updateUsersBtn();
+        joinedRooms.forEach(r => {
+          if (clientsByRoom[r] && clientsByRoom[r][client_id]) {
+            clientsByRoom[r][client_id].name = name;
+          }
+        });
         if (locationEntities[client_id]) {
           locationEntities[client_id].label.text = name;
           locationEntities[client_id].properties.name = name;
         }
       }
-      renderUsers();
+      if (roomId === currentRoomId) {
+        clients = clientsByRoom[roomId];
+        renderUsers();
+      }
       break;
     }
 
     case 'locations': {
-      (data.locations || []).forEach(l => addOrUpdateLocation(l));
-      renderUsers();
+      const roomId = data.room_id;
+      locationsByRoom[roomId] = {};
+      (data.locations || []).forEach(l => {
+        locationsByRoom[roomId][l.client_id] = l;
+        if (roomId === currentRoomId) addOrUpdateLocation(l);
+      });
+      if (roomId === currentRoomId) renderUsers();
       break;
     }
 
     case 'location': {
-      addOrUpdateLocation(data);
-      renderUsers();
-      if (data.client_id !== client_id) {
-        const uname = clients[data.client_id]?.name || data.client_name || 'Utilisateur';
-        if (!locationShared[data.client_id]) {
-          showToast(`${uname} a partagé sa localisation`);
-          locationShared[data.client_id] = true;
+      const roomId = data.room_id;
+      locationsByRoom[roomId] = locationsByRoom[roomId] || {};
+      locationsByRoom[roomId][data.client_id] = data;
+      if (roomId === currentRoomId) {
+        addOrUpdateLocation(data);
+        renderUsers();
+        if (data.client_id !== client_id) {
+          const uname = clientsByRoom[roomId]?.[data.client_id]?.name || data.client_name || 'Utilisateur';
+          const ls = locationShared[roomId] || (locationShared[roomId] = {});
+          if (!ls[data.client_id]) {
+            showToast(`${uname} a partagé sa localisation`);
+            ls[data.client_id] = true;
+          }
         }
       }
       break;
     }
 
     case 'location_remove': {
-      removeLocation(data.client_id);
-      renderUsers();
-      if (data.client_id !== client_id) {
-        const uname = clients[data.client_id]?.name || 'Utilisateur';
-        if (locationShared[data.client_id]) {
-          showToast(`${uname} a retiré sa localisation`);
-          locationShared[data.client_id] = false;
+      const roomId = data.room_id;
+      if (locationsByRoom[roomId]) delete locationsByRoom[roomId][data.client_id];
+      if (roomId === currentRoomId) {
+        removeLocation(data.client_id);
+        renderUsers();
+        if (data.client_id !== client_id) {
+          const uname = clientsByRoom[roomId]?.[data.client_id]?.name || 'Utilisateur';
+          const ls = locationShared[roomId];
+          if (ls && ls[data.client_id]) {
+            showToast(`${uname} a retiré sa localisation`);
+            ls[data.client_id] = false;
+          }
         }
       }
       break;
@@ -1120,19 +1185,27 @@ function onmessage(e){
     }
 
     case 'logout': {
-      const uname = clients[data.from_client_id]?.name || 'Utilisateur';
-      delete clients[data.from_client_id];
-      renderUsers();
-      delete locationShared[data.from_client_id];
-      showToast(`${uname} s'est déconnecté`);
+      const roomId = data.room_id;
+      const uname = clientsByRoom[roomId]?.[data.from_client_id]?.name || 'Utilisateur';
+      if (clientsByRoom[roomId]) delete clientsByRoom[roomId][data.from_client_id];
+      if (locationsByRoom[roomId]) delete locationsByRoom[roomId][data.from_client_id];
+      if (roomId === currentRoomId) {
+        removeLocation(data.from_client_id);
+        clients = clientsByRoom[roomId] || {};
+        renderUsers();
+        if (locationShared[roomId]) delete locationShared[roomId][data.from_client_id];
+        showToast(`${uname} s'est déconnecté`);
+      }
       break;
     }
     case 'wizz': {
-      alert('Wizz de ' + (clients[data.from]?.name || 'Utilisateur') + '!');
+      const uname = Object.values(clientsByRoom).reduce((n,r) => n || r[data.from]?.name, undefined) || 'Utilisateur';
+      alert('Wizz de ' + uname + '!');
       break;
     }
     case 'call_invite': {
-      if (confirm('Rejoindre l\'appel ' + (data.video ? 'video' : 'audio') + ' de ' + (clients[data.from]?.name || 'Utilisateur') + ' ?')) {
+      const uname = Object.values(clientsByRoom).reduce((n,r) => n || r[data.from]?.name, undefined) || 'Utilisateur';
+      if (confirm('Rejoindre l\'appel ' + (data.video ? 'video' : 'audio') + ' de ' + uname + ' ?')) {
         joinCall(data.room, data.video);
       }
       break;
