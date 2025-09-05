@@ -367,6 +367,49 @@ viewBtn.onclick = () => {
 };
 toolbar.appendChild(viewBtn);
 
+const earthGlobe = viewer.scene.globe;
+const earthImageryProvider = viewer.imageryLayers.get(0).imageryProvider;
+let moonGlobe = null;
+let moonImageryProvider = null;
+
+function flyToEarth(){
+  viewer.scene.globe = earthGlobe;
+  viewer.imageryLayers.removeAll();
+  viewer.imageryLayers.addImageryProvider(earthImageryProvider);
+  viewer.scene.skyAtmosphere.show = true;
+  viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(0,0,30000000)});
+}
+
+function flyToMoon(){
+  if (!moonGlobe) {
+    moonGlobe = new Cesium.Globe(Cesium.Ellipsoid.MOON);
+  }
+  viewer.scene.globe = moonGlobe;
+  viewer.scene.skyAtmosphere.show = false;
+  viewer.imageryLayers.removeAll();
+  const loadProvider = moonImageryProvider
+    ? Promise.resolve(moonImageryProvider)
+    : Cesium.IonImageryProvider.fromAssetId(3954).then(p=> (moonImageryProvider = p));
+  loadProvider.then(provider => {
+    viewer.imageryLayers.addImageryProvider(provider);
+    viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(0,0,1737400*4)});
+  });
+}
+
+const earthBtn = document.createElement('button');
+earthBtn.className = 'cesium-button cesium-toolbar-button';
+earthBtn.textContent = '🌍';
+earthBtn.title = 'Voler vers la Terre';
+earthBtn.onclick = flyToEarth;
+toolbar.appendChild(earthBtn);
+
+const moonBtn = document.createElement('button');
+moonBtn.className = 'cesium-button cesium-toolbar-button';
+moonBtn.textContent = '🌑';
+moonBtn.title = 'Voler vers la Lune';
+moonBtn.onclick = flyToMoon;
+toolbar.appendChild(moonBtn);
+
 const startOverlay = document.getElementById('startOverlay');
 document.getElementById('watchBtn').onclick = () => {
   showToast('Vous allez être posé sur Null Island (0 latitude, 0 longitude)');
