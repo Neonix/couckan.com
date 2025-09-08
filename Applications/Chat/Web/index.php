@@ -225,6 +225,7 @@ const viewer = new Cesium.Viewer('cesiumContainer', {
   });
 
 viewer.scene.moon.show = true;
+viewer.scene.moon.textureUrl = Cesium.IonResource.fromAssetId(3954);
 viewer.scene.sun.show = true;
 viewer.scene.globe.enableLighting = true;
 viewer.clock.clockStep = Cesium.ClockStep.SYSTEM_CLOCK;
@@ -375,7 +376,10 @@ function flyToEarth(){
 
 function flyToMoon(){
   const moon = viewer.scene.moon;
-  const moonPos = moon.position;
+  const moonPos = Cesium.Simon1994PlanetaryPositions.computeMoonPositionInEarthInertialFrame(
+    Cesium.JulianDate.now(),
+    new Cesium.Cartesian3()
+  );
   const direction = Cesium.Cartesian3.normalize(moonPos, new Cesium.Cartesian3());
   const range = moon.boundingSphere.radius * 4;
   const destination = Cesium.Cartesian3.add(
