@@ -366,33 +366,31 @@ viewBtn.onclick = () => {
   updateViewBtn();
 };
 toolbar.appendChild(viewBtn);
-
-const earthGlobe = viewer.scene.globe;
-const earthImageryProvider = viewer.imageryLayers.get(0).imageryProvider;
-let moonGlobe = null;
-let moonImageryProvider = null;
-
 function flyToEarth(){
-  viewer.scene.globe = earthGlobe;
-  viewer.imageryLayers.removeAll();
-  viewer.imageryLayers.addImageryProvider(earthImageryProvider);
-  viewer.scene.skyAtmosphere.show = true;
-  viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(0,0,30000000)});
+  viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(0, 0, 30000000),
+    duration: 5
+  });
 }
 
 function flyToMoon(){
-  if (!moonGlobe) {
-    moonGlobe = new Cesium.Globe(Cesium.Ellipsoid.MOON);
-  }
-  viewer.scene.globe = moonGlobe;
-  viewer.scene.skyAtmosphere.show = false;
-  viewer.imageryLayers.removeAll();
-  const loadProvider = moonImageryProvider
-    ? Promise.resolve(moonImageryProvider)
-    : Cesium.IonImageryProvider.fromAssetId(3954).then(p=> (moonImageryProvider = p));
-  loadProvider.then(provider => {
-    viewer.imageryLayers.addImageryProvider(provider);
-    viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(0,0,1737400*4)});
+  const moon = viewer.scene.moon;
+  const moonPos = moon.position;
+  const direction = Cesium.Cartesian3.normalize(moonPos, new Cesium.Cartesian3());
+  const range = moon.boundingSphere.radius * 4;
+  const destination = Cesium.Cartesian3.add(
+    moonPos,
+    Cesium.Cartesian3.multiplyByScalar(direction, range, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3()
+  );
+  const toMoon = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.subtract(moonPos, destination, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3()
+  );
+  viewer.camera.flyTo({
+    destination,
+    orientation: { direction: toMoon, up: Cesium.Cartesian3.UNIT_Z },
+    duration: 5
   });
 }
 
