@@ -224,7 +224,7 @@ const viewer = new Cesium.Viewer('cesiumContainer', {
     sceneModePicker:false, navigationHelpButton:false, shouldAnimate:true
   });
 
-viewer.scene.moon.show = true;
+viewer.scene.moon.show = false;
 Cesium.IonResource.fromAssetId(3954).then(function(resource){
   viewer.scene.moon.textureUrl = resource;
 });
@@ -370,6 +370,8 @@ viewBtn.onclick = () => {
 };
 toolbar.appendChild(viewBtn);
 function flyToEarth(){
+  viewer.scene.globe.show = true;
+  viewer.scene.moon.show = false;
   viewer.camera.flyTo({
     destination: Cesium.Cartesian3.fromDegrees(0, 0, 30000000),
     duration: 5
@@ -377,6 +379,8 @@ function flyToEarth(){
 }
 
 function flyToMoon(){
+  viewer.scene.globe.show = false;
+  viewer.scene.moon.show = true;
   const moon = viewer.scene.moon;
   const now = Cesium.JulianDate.now();
   const moonEci = Cesium.Simon1994PlanetaryPositions.computeMoonPositionInEarthInertialFrame(
