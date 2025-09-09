@@ -9,6 +9,7 @@ include __DIR__ . '/../../../config.php';
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Chat futuriste pour se connecter et converser en temps réel sur une carte interactive." />
   <link rel="canonical" href="https://couckan.com/" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta property="og:title" content="Chat Futuriste" />
   <meta property="og:description" content="Rejoignez Couckan pour discuter en temps réel sur une carte interactive mondiale." />
   <meta property="og:type" content="website" />
@@ -582,7 +583,8 @@ function connectSignal(room){
   signal = new WebSocket(SIGNALING_URL);
   signal.onopen = () => {
     signal.send(JSON.stringify({cmd:'register', roomid:room}));
-    signalSend({type:'join', from:client_id});
+    // include room in join to ensure peers only react to participants in the same call
+    signalSend({type:'join', room:room, from:client_id});
   };
   signal.onmessage = e => {
     const data = JSON.parse(e.data);
@@ -606,7 +608,8 @@ function signalSend(msg){
 async function handleSignal(msg){
   switch(msg.type){
     case 'join':
-      if (msg.from === client_id) return;
+      // ignore join messages from ourselves or from other rooms
+      if (msg.from === client_id || msg.room !== callRoom) return;
       // L'offre initiale sera générée par le gestionnaire `onnegotiationneeded`
       // déclenché lors de l'ajout des pistes locales dans `createPeer`.
       createPeer(msg.from);
