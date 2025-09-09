@@ -376,12 +376,15 @@ function flyToEarth(){
 
 function flyToMoon(){
   const moon = viewer.scene.moon;
-  const moonPos = Cesium.Simon1994PlanetaryPositions.computeMoonPositionInEarthInertialFrame(
-    Cesium.JulianDate.now(),
+  const now = Cesium.JulianDate.now();
+  const moonEci = Cesium.Simon1994PlanetaryPositions.computeMoonPositionInEarthInertialFrame(
+    now,
     new Cesium.Cartesian3()
   );
+  const icrfToFixed = Cesium.Transforms.computeIcrfToFixedMatrix(now);
+  const moonPos = Cesium.Matrix3.multiplyByVector(icrfToFixed, moonEci, new Cesium.Cartesian3());
   const direction = Cesium.Cartesian3.normalize(moonPos, new Cesium.Cartesian3());
-  const range = moon.ellipsoid.maximumRadius * 4;
+  const range = moon.ellipsoid.maximumRadius * 1.2;
   const destination = Cesium.Cartesian3.add(
     moonPos,
     Cesium.Cartesian3.multiplyByScalar(direction, range, new Cesium.Cartesian3()),
