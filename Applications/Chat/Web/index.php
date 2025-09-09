@@ -200,10 +200,24 @@ let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
 let lastCallRoom = null, lastCallVideo = false;
 let micEnabled = true, videoEnabled = true;
 let wakeLock = null;
+let lastCallError = '';
 
 function showCallError(msg){
   document.getElementById('callError').textContent = msg || '';
-  if (msg) showToast('Erreur: ' + msg);
+  if (msg && msg !== lastCallError){
+    showToast('Erreur: ' + msg);
+    lastCallError = msg;
+  }
+  if (!msg) lastCallError = '';
+}
+
+function translateIceError(text){
+  if (!text) return '';
+  const cleaned = text.replace('Addess','Address');
+  const map = {
+    'Address not associated with the desired network interface': "Adresse non associée à l'interface réseau souhaitée"
+  };
+  return map[cleaned] || cleaned;
 }
 
 function mediaErrorMessage(err){
@@ -670,7 +684,8 @@ function createPeer(id){
   pc.onicecandidate = e => { if (e.candidate) signalSend({type:'candidate', from:client_id, to:id, candidate:e.candidate}); };
   pc.onicecandidateerror = e => {
     console.error('icecandidateerror', e);
-    showCallError('Erreur ICE (' + e.errorCode + '): ' + e.errorText + '. Vérifiez votre configuration réseau/NAT.');
+    const txt = translateIceError(e.errorText);
+    showCallError('Erreur ICE (' + e.errorCode + '): ' + txt + '. Vérifiez votre configuration réseau/NAT.');
   };
   // Ajoute directement le premier flux reçu (audio+vidéo) au lecteur distant
   pc.ontrack = e => addRemoteStream(id, e.streams[0]);
