@@ -386,10 +386,13 @@ function flyToMoon(){
   const icrfToFixed = Cesium.Transforms.computeIcrfToFixedMatrix(now);
   const moonPos = Cesium.Matrix3.multiplyByVector(icrfToFixed, moonEci, new Cesium.Cartesian3());
   const direction = Cesium.Cartesian3.normalize(moonPos, new Cesium.Cartesian3());
-  const range = moon.ellipsoid.maximumRadius * 1.2;
   const destination = Cesium.Cartesian3.add(
     moonPos,
-    Cesium.Cartesian3.multiplyByScalar(direction, range, new Cesium.Cartesian3()),
+    Cesium.Cartesian3.multiplyByScalar(
+      direction,
+      moon.ellipsoid.maximumRadius + 1000,
+      new Cesium.Cartesian3()
+    ),
     new Cesium.Cartesian3()
   );
   const toMoon = Cesium.Cartesian3.normalize(
