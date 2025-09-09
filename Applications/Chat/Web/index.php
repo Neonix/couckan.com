@@ -7,8 +7,25 @@ include __DIR__ . '/../../../config.php';
   <meta charset="UTF-8" />
   <title>⚡ Chat Futuriste ⚡</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Chat futuriste pour se connecter et converser en temps réel sur une carte interactive." />
+  <link rel="canonical" href="https://couckan.com/" />
+  <meta property="og:title" content="Chat Futuriste" />
+  <meta property="og:description" content="Rejoignez Couckan pour discuter en temps réel sur une carte interactive mondiale." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://couckan.com/" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Chat Futuriste" />
+  <meta name="twitter:description" content="Rejoignez Couckan pour discuter en temps réel sur une carte interactive mondiale." />
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.111/Build/Cesium/Cesium.js"></script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Couckan Chat",
+    "url": "https://couckan.com/"
+  }
+  </script>
   <style>
     :root{
       --bg:#0f172a; --panel:#1e293b; --muted:#334155; --muted-2:#475569;
