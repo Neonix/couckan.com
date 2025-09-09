@@ -223,15 +223,8 @@ function mediaErrorMessage(err){
 }
 
   <?php
-  if ($_config['docker']) {
-    echo "const SIGNALING_URL = 'wss://' + document.domain + '/signal';";
-  } else {
-      // WebServer
-      if ($_config['ssl'])
-        echo "const SIGNALING_URL = 'wss://' + document.domain + ':8877';";
-      else
-        echo "const SIGNALING_URL = 'ws://' + document.domain + ':8877';";
-  }
+  // Use the signaling URL computed from configuration to avoid hard coded ports
+  echo "const SIGNALING_URL = '" . $SIGNALING_ADDRESS . "';";
   echo "\nconst ICE_SERVERS = " . json_encode($_config['ice_servers']) . ";";
   ?>
   
@@ -646,6 +639,7 @@ async function handleSignal(msg){
         await pc4.addIceCandidate(new RTCIceCandidate(msg.candidate));
       } catch(err){
         console.error('candidate', err);
+        showCallError("Candidat ICE invalide ou bloqué par le réseau.");
       }
       break;
     case 'leave':

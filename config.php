@@ -35,7 +35,13 @@ $_config = [
 
 $scheme = $_config['ssl'] ? 'wss://' : 'ws://';
 $host   = $_config['localdev'] ? 'localhost' : 'couckan.com';
-$SIGNALING_ADDRESS = 'wss://' . $host . '/signal';
+if ($_config['localdev']) {
+    // In local development we connect directly to the signaling port
+    $SIGNALING_ADDRESS = $scheme . $host . ':8877';
+} else {
+    // In production the signaling server is proxied behind /signal
+    $SIGNALING_ADDRESS = $scheme . $host . '/signal';
+}
 
 $SSL_CONTEXT = [
     'ssl' => [
