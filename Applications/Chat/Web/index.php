@@ -674,6 +674,10 @@ function createPeer(id){
   peers[id] = pc;
   if (localStream) localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
   pc.onicecandidate = e => { if (e.candidate) signalSend({type:'candidate', from:client_id, to:id, candidate:e.candidate}); };
+  pc.onicecandidateerror = e => {
+    console.error('icecandidateerror', e);
+    showCallError('Erreur ICE (' + e.errorCode + '): ' + e.errorText + '. Vérifiez votre configuration réseau/NAT.');
+  };
   // Ajoute directement le premier flux reçu (audio+vidéo) au lecteur distant
   pc.ontrack = e => addRemoteStream(id, e.streams[0]);
   pc.onnegotiationneeded = async () => {
