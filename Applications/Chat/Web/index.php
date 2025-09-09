@@ -225,7 +225,9 @@ const viewer = new Cesium.Viewer('cesiumContainer', {
   });
 
 viewer.scene.moon.show = true;
-viewer.scene.moon.textureUrl = Cesium.IonResource.fromAssetId(3954);
+Cesium.IonResource.fromAssetId(3954).then(function(resource){
+  viewer.scene.moon.textureUrl = resource;
+});
 viewer.scene.sun.show = true;
 viewer.scene.globe.enableLighting = true;
 viewer.clock.clockStep = Cesium.ClockStep.SYSTEM_CLOCK;
