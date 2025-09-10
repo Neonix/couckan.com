@@ -247,7 +247,7 @@ const CESIUM_ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjNmM4N
 Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
 
 const viewer = new Cesium.Viewer('cesiumContainer', {
-    geocoder:false, homeButton:true, baseLayerPicker:false, timeline:false, animation:false,
+    geocoder:false, homeButton:false, baseLayerPicker:false, timeline:false, animation:false,
     sceneModePicker:false, navigationHelpButton:false, shouldAnimate:true
   });
 
@@ -446,15 +446,7 @@ document.getElementById('playBtn').onclick = () => {
   myZoom = 5000;
   locationState = 'all';
   shareLocation();
-  updateLocBtn();
 };
-const homeBtn = toolbar.querySelector('.cesium-home-button');
-if (homeBtn) {
-  homeBtn.addEventListener('click', () => {
-    usersPanel.classList.remove('active');
-  });
-}
-
 document.addEventListener('click', (e) => {
   if (justOpenedProfile) { justOpenedProfile = false; return; }
   const path = e.composedPath();
@@ -935,6 +927,8 @@ function shareLocation(){
   const errorHandler = err => {
     console.warn('Erreur de localisation :', err.message);
     pendingLocationMsg = null;
+    locationState = 'none';
+    updateLocBtn();
     showToast('Erreur localisation: ' + err.message);
   };
 
@@ -942,6 +936,7 @@ function shareLocation(){
   navigator.geolocation.getCurrentPosition(pos => {
     sendPosition(pos);
     locationWatchId = navigator.geolocation.watchPosition(sendPosition, errorHandler, options);
+    updateLocBtn();
   }, errorHandler, options);
 }
 
