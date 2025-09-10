@@ -78,7 +78,8 @@ include __DIR__ . '/../../../config.php';
     .input textarea{flex:1;min-height:42px;max-height:160px;resize:vertical;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.6rem;border-radius:8px}
     .input button{background:var(--accent);border:none;color:#fff;border-radius:8px;padding:.55rem 1rem;cursor:pointer}
     .dot{width:10px;height:10px;border-radius:50%}
-    .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)} .dot.invisible{background:var(--invisible)}
+    .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)} .dot.invisible{background:var(--invisible)} .dot.offline{background:var(--invisible);opacity:.4}
+    .dm-status{display:flex;align-items:center;gap:.35rem;margin-bottom:.5rem;font-size:.85rem;color:var(--sub)}
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
     #toastContainer{position:fixed;top:calc(1rem + env(safe-area-inset-top));left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;align-items:center}
@@ -188,7 +189,9 @@ function getUserMedia(constraints){
   });
 }
 
-const storedId = localStorage.getItem('chatUid');
+const storedId      = localStorage.getItem('chatUid');
+const storedKey     = localStorage.getItem('currentChatKey') || 'room_general';
+const storedDmPeers = JSON.parse(localStorage.getItem('dmPeers') || '{}');
 let ws, name, client_id = storedId, status = 'online', clients = {};
 let locationWatchId = null, hasFlownToLocation = false, pendingLocationMsg = null, myZoom = 1000000;
 let notifState = (typeof Notification !== 'undefined' && Notification.permission === 'granted') ? 'all' : 'none',
@@ -266,6 +269,13 @@ const statusColors = {
   away: Cesium.Color.fromCssColorString('#ef4444'),
   invisible: Cesium.Color.fromCssColorString('#6b7280')
 };
+const statusLabels = {
+  online: 'En ligne',
+  busy: 'Occupé',
+  away: 'Absent',
+  invisible: 'Invisible',
+  offline: 'Déconnecté'
+};
 const chatWrapper = document.getElementById('chatWrapper');
 const toolbar = document.querySelector('.cesium-viewer-toolbar');
 const profilePopup = document.getElementById('profilePopup');
@@ -294,7 +304,7 @@ function toggleChat(){
   if (!hidden) {
     chatToggle.classList.remove('blink');
     if (notifKey) {
-      currentKey = notifKey;
+      setCurrentKey(notifKey);
       renderTabs();
       renderMessages();
       clearBlink(notifKey);
@@ -834,10 +844,21 @@ function shouldNotify(id){
   return true;
 }
 
+function setCurrentKey(k){
+  currentKey = k;
+  localStorage.setItem('currentChatKey', k);
+}
+
 // conversations: "room_<roomId>" ou "dm_<clientId>"
-let currentKey = 'room_general';
+let currentKey = storedKey;
 let messages   = { room_general: [] };
 let tabs       = { room_general: 'Salle générale' };
+let dmPeers    = storedDmPeers;
+Object.entries(dmPeers).forEach(([id, username]) => {
+  const key = 'dm_' + id;
+  tabs[key] = 'DM avec ' + username;
+  messages[key] = [];
+});
 let lastRenderedKey = null;
 let notifKey = null;
 let notificationsAllowed = (typeof Notification !== 'undefined' && Notification.permission === 'granted');
@@ -1039,6 +1060,20 @@ function onmessage(e){
       // S’assure que l’onglet de la room existe et devient actif
       ensureRoomTab(data.room_id);
       renderRooms();
+
+      // restaure les conversations privées de la session précédente
+      Object.entries(dmPeers).forEach(([id, username]) => {
+        const key = 'dm_' + id;
+        if (!tabs[key]) tabs[key] = 'DM avec ' + username;
+        if (!messages[key]) messages[key] = [];
+      });
+      setCurrentKey(storedKey);
+      renderTabs();
+      renderMessages();
+      if (currentKey.startsWith('dm_') && messages[currentKey].length === 0) {
+        const id = currentKey.slice(3);
+        ws.send(JSON.stringify({type: 'dm_history', to_client_id: id}));
+      }
       break;
     }
     case 'history': {
@@ -1052,10 +1087,14 @@ function onmessage(e){
       if (data.client_list) {
         clients = data.client_list;
         renderUsers();
+        renderTabs();
+        renderMessages();
       } else if (data.client_id && data.client_name) {
         // Sécurité : merge si pas de client_list
         clients[data.client_id] = {name: data.client_name, status: data.status || 'online'};
         renderUsers();
+        renderTabs();
+        renderMessages();
         if (data.client_id !== client_id) showToast(`${data.client_name} s'est connecté`);
       }
       break;
@@ -1066,6 +1105,8 @@ function onmessage(e){
       if (!clients[data.client_id]) clients[data.client_id] = {name:'Utilisateur', status:data.status};
       clients[data.client_id].status = data.status;
       renderUsers();
+      renderTabs();
+      renderMessages();
       if (locationEntities[data.client_id]) {
         locationEntities[data.client_id].point.color = statusColors[data.status] || Cesium.Color.CYAN;
       }
@@ -1138,7 +1179,7 @@ function onmessage(e){
       renderRooms();
 
       // créer onglet, basculer, join
-      currentKey = 'room_' + room_id;
+      setCurrentKey('room_' + room_id);
       tabs[currentKey] = 'Salle ' + room_id;
       if (!messages[currentKey]) messages[currentKey] = [];
       renderTabs(); renderMessages();
@@ -1157,7 +1198,7 @@ function onmessage(e){
         delete tabs[key];
         delete messages[key];
         if (currentKey === key) {
-          currentKey = 'room_general';
+          setCurrentKey('room_general');
           loginRoom('general');
         }
         renderRooms(); renderTabs(); renderMessages();
@@ -1180,7 +1221,7 @@ function onmessage(e){
       if (String(data.from_client_id) !== String(client_id)) {
         const uname = data.from_client_name || clients[data.from_client_id]?.name || 'Utilisateur';
         showToast(`${uname}: ${data.content}`, ()=>{
-          currentKey = key;
+          setCurrentKey(key);
           renderTabs();
           renderMessages();
           clearBlink(key);
@@ -1193,7 +1234,7 @@ function onmessage(e){
           new Notification('Message privé de ' + (data.from_client_name || 'Utilisateur'), {
             body: data.content || ''
           }).onclick = ()=>{
-            currentKey = key;
+            setCurrentKey(key);
             renderTabs();
             renderMessages();
             clearBlink(key);
@@ -1212,6 +1253,8 @@ function onmessage(e){
       const uname = clients[data.from_client_id]?.name || 'Utilisateur';
       delete clients[data.from_client_id];
       renderUsers();
+      renderTabs();
+      renderMessages();
       delete locationShared[data.from_client_id];
       showToast(`${uname} s'est déconnecté`);
       break;
@@ -1238,7 +1281,7 @@ function ensureRoomTab(roomId){
   if (!tabs[key])     tabs[key]     = (rooms.get(roomId)?.visibility === 'private' ? '🔒 ' : '') + 'Salle ' + roomId;
   if (!messages[key]) messages[key] = [];
   if (!rooms.has(roomId)) rooms.set(roomId, {visibility:'public', creator_id:null});
-  currentKey = key;
+  setCurrentKey(key);
   renderTabs(); renderMessages();
 }
 
@@ -1252,14 +1295,22 @@ function renderTabs(){
   const roomsTab = document.createElement('div');
   roomsTab.className = 'tab' + (currentKey === 'rooms' ? ' active' : '');
   roomsTab.textContent = 'Salles';
-  roomsTab.onclick = () => { currentKey = 'rooms'; renderTabs(); renderMessages(); chatToggle.classList.remove('blink'); if (notifKey === 'rooms') notifKey = null; };
+  roomsTab.onclick = () => { setCurrentKey('rooms'); renderTabs(); renderMessages(); chatToggle.classList.remove('blink'); if (notifKey === 'rooms') notifKey = null; };
   roomsTab.id = 'tab_rooms';
   t.appendChild(roomsTab);
 
   Object.keys(tabs).forEach(k => {
     const div   = document.createElement('div');
-    const label = document.createElement('span');
     div.className = 'tab' + (k === currentKey ? ' active' : '');
+    if (k.startsWith('dm_')) {
+      const partnerId = k.substring(3);
+      const st = clients[partnerId]?.status || 'offline';
+      const dot = document.createElement('span');
+      dot.className = 'dot ' + (st === 'online' ? 'ok' : st);
+      dot.title = statusLabels[st] || st;
+      div.appendChild(dot);
+    }
+    const label = document.createElement('span');
     label.textContent = tabs[k];
     div.appendChild(label);
 
@@ -1303,7 +1354,7 @@ function renderTabs(){
       div.appendChild(actions);
     }
 
-    div.onclick = () => { currentKey = k; renderTabs(); renderMessages(); clearBlink(k); chatToggle.classList.remove('blink'); if (notifKey === k) notifKey = null; };
+    div.onclick = () => { setCurrentKey(k); renderTabs(); renderMessages(); clearBlink(k); chatToggle.classList.remove('blink'); if (notifKey === k) notifKey = null; };
     div.id = 'tab_' + k;
     t.appendChild(div);
   });
@@ -1328,7 +1379,7 @@ function createRoom(){
 
   // Publique : on bascule tout de suite
   if (!isPrivate) {
-    currentKey = 'room_' + roomId;
+    setCurrentKey('room_' + roomId);
     tabs[currentKey] = 'Salle ' + roomId;
     if (!messages[currentKey]) messages[currentKey] = [];
     renderTabs(); renderMessages();
@@ -1350,7 +1401,7 @@ function closeRoom(roomId){
   delete messages[key];
   rooms.delete(roomId);
   if (currentKey === key) {
-    currentKey = 'room_general';
+    setCurrentKey('room_general');
     renderMessages();
   }
   renderTabs();
@@ -1360,8 +1411,10 @@ function closeDM(id){
   const key = 'dm_' + id;
   delete tabs[key];
   delete messages[key];
+  delete dmPeers[id];
+  localStorage.setItem('dmPeers', JSON.stringify(dmPeers));
   if (currentKey === key) {
-    currentKey = 'room_general';
+    setCurrentKey('room_general');
     renderMessages();
   }
   renderTabs();
@@ -1424,6 +1477,15 @@ function storeMessage(m){
   if (!messages[key]) messages[key] = [];
   messages[key].push(m);
 
+  if (m.dm) {
+    const partner = (String(m.from_client_id) === String(client_id)) ? m.to_client_id : m.from_client_id;
+    const partnerName = (String(m.from_client_id) === String(client_id))
+      ? (clients[m.to_client_id]?.name || dmPeers[partner] || 'Utilisateur')
+      : (m.from_client_name || 'Utilisateur');
+    dmPeers[partner] = partnerName;
+    localStorage.setItem('dmPeers', JSON.stringify(dmPeers));
+  }
+
   // créer onglet si besoin
   if (!tabs[key]) {
     tabs[key] = m.dm ? ('DM avec ' + m.from_client_name) : ('Salle ' + (m.room_id || 'general'));
@@ -1453,7 +1515,7 @@ function renderMessages(){
       div.className = 'item' + (currentKey === key ? ' active' : '');
       div.textContent = (meta.visibility === 'private' ? '🔒 ' : '') + 'Salle ' + id;
       div.onclick = () => {
-        currentKey = key;
+        setCurrentKey(key);
         ensureRoomTab(id);
         renderTabs(); renderMessages();
         loginRoom(id);
@@ -1494,6 +1556,18 @@ function renderMessages(){
     return;
   }
   inputWrapper.style.display = 'flex';
+  if (currentKey.startsWith('dm_')) {
+    const partnerId = currentKey.slice(3);
+    const uname = clients[partnerId]?.name || dmPeers[partnerId] || 'Utilisateur';
+    const st = clients[partnerId]?.status || 'offline';
+    const statusDiv = document.createElement('div');
+    statusDiv.className = 'dm-status';
+    const dot = document.createElement('span');
+    dot.className = 'dot ' + (st === 'online' ? 'ok' : st);
+    statusDiv.appendChild(dot);
+    statusDiv.appendChild(document.createTextNode(`${uname} - ${statusLabels[st] || st}`));
+    box.appendChild(statusDiv);
+  }
   const list = messages[currentKey] || [];
   for (const m of list) {
     const div = document.createElement('div');
@@ -1514,9 +1588,14 @@ function openDM(id, username){
   const key = 'dm_' + id;
   if (!messages[key]) messages[key] = [];
   tabs[key] = 'DM avec ' + username;
-  currentKey = key;
+  dmPeers[id] = username;
+  localStorage.setItem('dmPeers', JSON.stringify(dmPeers));
+  setCurrentKey(key);
   renderTabs();
   renderMessages();
+  if (messages[key].length === 0) {
+    ws.send(JSON.stringify({type: 'dm_history', to_client_id: id}));
+  }
   if (chatWrapper.classList.contains('hidden')) {
     chatWrapper.classList.remove('hidden');
     chatToggle.textContent = '⬇️';
