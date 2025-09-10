@@ -145,6 +145,30 @@ class Events
                 return;
             }
 
+            case 'typing': {
+                $uuid = $_SESSION['client_uuid'] ?? $client_id;
+                $client_name = $_SESSION['client_name'] ?? 'Invité';
+                if (!empty($data['to_client_id'])) {
+                    $to = $data['to_client_id'];
+                    $msg = [
+                        'type' => 'typing',
+                        'from_client_id' => $uuid,
+                        'from_client_name' => $client_name,
+                        'dm' => true,
+                    ];
+                    Gateway::sendToUid($to, json_encode($msg));
+                } else {
+                    $room_id = $_SESSION['room_id'] ?? 'general';
+                    $msg = [
+                        'type' => 'typing',
+                        'from_client_id' => $uuid,
+                        'from_client_name' => $client_name,
+                        'room_id' => $room_id,
+                    ];
+                    Gateway::sendToGroup($room_id, json_encode($msg));
+                }
+                return;
+            }
             case 'rename': {
                 $new = htmlspecialchars(trim($data['client_name'] ?? ''));
                 if ($new === '') $new = 'Invité';

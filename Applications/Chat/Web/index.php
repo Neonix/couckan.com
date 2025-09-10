@@ -80,6 +80,8 @@ include __DIR__ . '/../../../config.php';
     .dot{width:10px;height:10px;border-radius:50%}
     .dot.ok{background:var(--ok)} .dot.busy{background:var(--busy)} .dot.away{background:var(--away)} .dot.invisible{background:var(--invisible)} .dot.offline{background:var(--invisible);opacity:.4}
     .dm-status{display:flex;align-items:center;gap:.35rem;margin-bottom:.5rem;font-size:.85rem;color:var(--sub)}
+    .typing-indicator{font-size:.85rem;color:var(--sub);padding:.25rem 1rem;}
+    .typing-indicator.hidden{display:none;}
     .select{width:100%;background:#0b1220;border:1px solid #203244;color:#e5e7eb;padding:.45rem .5rem;border-radius:6px}
     .hint{font-size:.8rem;color:#a3b2c7}
     #toastContainer{position:fixed;top:calc(1rem + env(safe-area-inset-top));left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:.5rem;z-index:100;align-items:center}
@@ -127,6 +129,7 @@ include __DIR__ . '/../../../config.php';
       <div id="tabs"></div>
     </div>
     <div class="messages" id="messages"></div>
+    <div class="typing-indicator hidden" id="typingIndicator"></div>
     <div class="input">
       <textarea id="input" placeholder="Écris un message..."></textarea>
       <button onclick="onSubmit()">Envoyer</button>
@@ -193,6 +196,7 @@ const storedId      = localStorage.getItem('chatUid');
 const storedKey     = localStorage.getItem('currentChatKey') || 'room_general';
 const storedDmPeers = JSON.parse(localStorage.getItem('dmPeers') || '{}');
 let ws, name, client_id = storedId, status = 'online', clients = {};
+const typingUsers = {}; let lastTypingSent = 0;
 let locationWatchId = null, hasFlownToLocation = false, pendingLocationMsg = null, myZoom = 1000000;
 let notifState = (typeof Notification !== 'undefined' && Notification.permission === 'granted') ? 'all' : 'none',
     locationState = 'none',
@@ -1113,6 +1117,19 @@ function onmessage(e){
       break;
     }
 
+      case 'typing': {
+        if (!clients[data.from_client_id]) clients[data.from_client_id] = {name: data.from_client_name || 'Utilisateur', status: 'online'};
+        const key = data.dm ? 'dm_' + data.from_client_id : 'room_' + data.room_id;
+        if (!typingUsers[key]) typingUsers[key] = {};
+        const id = data.from_client_id;
+        if (typingUsers[key][id]) clearTimeout(typingUsers[key][id]);
+        typingUsers[key][id] = setTimeout(() => {
+          delete typingUsers[key][id];
+          renderTyping();
+        }, 3000);
+        renderTyping();
+        break;
+      }
     case 'rename': {
       if (!clients[data.client_id]) {
         clients[data.client_id] = {name: data.client_name || 'Invité', status: 'online'};
@@ -1579,8 +1596,22 @@ function renderMessages(){
     box.scrollTop = box.scrollHeight;
   }
   lastRenderedKey = currentKey;
+  renderTyping();
 }
 
+function renderTyping(){
+  const indicator = document.getElementById('typingIndicator');
+  const conv = typingUsers[currentKey] || {};
+  const ids = Object.keys(conv);
+  if (ids.length === 0) {
+    indicator.textContent = '';
+    indicator.classList.add('hidden');
+    return;
+  }
+  const names = ids.map(id => clients[id]?.name || 'Utilisateur');
+  indicator.textContent = names.length === 1 ? `${names[0]} est en train d’écrire…` : `${names.join(', ')} sont en train d’écrire…`;
+  indicator.classList.remove('hidden');
+}
 /* =========================
    ENVOI / DM
 ========================= */
@@ -1632,6 +1663,14 @@ function onSubmit(){
 document.getElementById('input').addEventListener('keydown', (e)=>{
   if (e.key === 'Enter' && !e.ctrlKey) { e.preventDefault(); onSubmit(); }
   else if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); e.target.value += '\n'; }
+});
+document.getElementById('input').addEventListener('input', () => {
+  const now = Date.now();
+  if (now - lastTypingSent < 1000) return;
+  const msg = {type: 'typing'};
+  if (currentKey.startsWith('dm_')) msg.to_client_id = currentKey.slice(3);
+  ws.send(JSON.stringify(msg));
+  lastTypingSent = now;
 });
 
 /* Blink onglets */
