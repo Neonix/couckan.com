@@ -685,11 +685,11 @@ function createPeer(id){
   if (localStream) localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
   pc.onicecandidate = e => { if (e.candidate) signalSend({type:'candidate', from:client_id, to:id, candidate:e.candidate}); };
   pc.onicecandidateerror = e => {
-    const key = `${e.errorCode}|${e.errorText}|${e.url}`;
+    const txt = translateIceError(e.errorText);
+    const key = `${e.errorCode}|${txt}`;
     if (shownIceErrors.has(key)) return;
     shownIceErrors.add(key);
     console.error('icecandidateerror', e);
-    const txt = translateIceError(e.errorText);
     showCallError('Erreur ICE (' + e.errorCode + '): ' + txt + '. Vérifiez votre configuration réseau/NAT.');
   };
   // Ajoute directement le premier flux reçu (audio+vidéo) au lecteur distant
