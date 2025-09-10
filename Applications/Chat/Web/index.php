@@ -151,11 +151,11 @@ include __DIR__ . '/../../../config.php';
     <div id="remoteVideos"></div>
     <div id="callError" class="error"></div>
     <div id="callControls">
-      <button class="btn secondary" id="micBtn" onclick="toggleMic()">Couper micro</button>
-      <button class="btn secondary" id="videoBtn" onclick="toggleVideo()">Désactiver vidéo</button>
-      <button class="btn secondary" onclick="toggleFullscreen()">Plein écran</button>
-      <button class="btn secondary" onclick="recall()">Rappeler</button>
-      <button class="btn" onclick="hangup()">Raccrocher</button>
+      <button class="btn secondary" id="micBtn" onclick="toggleMic()" title="Couper micro">🔇</button>
+      <button class="btn secondary" id="videoBtn" onclick="toggleVideo()" title="Désactiver vidéo">🎥</button>
+      <button class="btn secondary" onclick="toggleFullscreen()" title="Plein écran">⛶</button>
+      <button class="btn secondary" onclick="recall()" title="Rappeler">↻</button>
+      <button class="btn" onclick="hangup()" title="Raccrocher">📴</button>
     </div>
   </div>
   <div id="toastContainer"></div>
@@ -197,7 +197,7 @@ let notifState = (typeof Notification !== 'undefined' && Notification.permission
 const mutedUsers = new Set();
 const locationShared = {}; // track which users already triggered a location toast
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
-let lastCallRoom = null, lastCallVideo = false;
+let lastCallRoom = null, lastCallVideo = false, lastCallAction = null;
 let micEnabled = true, videoEnabled = true;
 let wakeLock = null;
 let lastCallError = '';
@@ -557,12 +557,14 @@ function wizz(id){
 
 function startCall(id, video){
   if (!client_id) return;
+  lastCallAction = {type:'user', id, video};
   const room = client_id < id ? `call_${client_id}_${id}` : `call_${id}_${client_id}`;
   ws.send(JSON.stringify({type:'call_invite', to:id, room, video}));
   joinCall(room, video);
 }
 
 function joinGroup(id){
+  lastCallAction = {type:'group', id};
   const room = `group_${id}`;
   joinCall(room, true);
 }
@@ -572,8 +574,12 @@ function joinCall(room, video){
   callRoom = room; callVideo = video;
   lastCallRoom = room; lastCallVideo = video;
   micEnabled = true; videoEnabled = video;
-  document.getElementById('micBtn').textContent = 'Couper micro';
-  document.getElementById('videoBtn').textContent = video ? 'Désactiver vidéo' : 'Activer vidéo';
+  const micBtn = document.getElementById('micBtn');
+  micBtn.textContent = '🔇';
+  micBtn.title = 'Couper micro';
+  const videoBtn = document.getElementById('videoBtn');
+  videoBtn.textContent = video ? '🎥' : '📷';
+  videoBtn.title = video ? 'Désactiver vidéo' : 'Activer vidéo';
   document.getElementById('callOverlay').classList.add('active');
   showCallError('');
   shownIceErrors.clear();
@@ -745,7 +751,14 @@ function toggleMic(){
   if (!track) return;
   micEnabled = !track.enabled;
   track.enabled = micEnabled;
-  document.getElementById('micBtn').textContent = micEnabled ? 'Couper micro' : 'Activer micro';
+  const btn = document.getElementById('micBtn');
+  if (micEnabled){
+    btn.textContent = '🔇';
+    btn.title = 'Couper micro';
+  } else {
+    btn.textContent = '🎤';
+    btn.title = 'Activer micro';
+  }
 }
 
 function toggleVideo(){
@@ -754,14 +767,23 @@ function toggleVideo(){
   if (track){
     videoEnabled = !track.enabled;
     track.enabled = videoEnabled;
-    document.getElementById('videoBtn').textContent = videoEnabled ? 'Désactiver vidéo' : 'Activer vidéo';
+    const btn = document.getElementById('videoBtn');
+    if (videoEnabled){
+      btn.textContent = '🎥';
+      btn.title = 'Désactiver vidéo';
+    } else {
+      btn.textContent = '📷';
+      btn.title = 'Activer vidéo';
+    }
   } else {
     getUserMedia({video:true}).then(stream=>{
       track = stream.getVideoTracks()[0];
       localStream.addTrack(track);
       Object.values(peers).forEach(pc=>pc.addTrack(track, localStream));
       videoEnabled = true;
-      document.getElementById('videoBtn').textContent = 'Désactiver vidéo';
+      const btn = document.getElementById('videoBtn');
+      btn.textContent = '🎥';
+      btn.title = 'Désactiver vidéo';
     }).catch(err=>{
       console.error('video', err);
       showCallError(mediaErrorMessage(err));
@@ -779,7 +801,12 @@ function toggleFullscreen(){
 }
 
 function recall(){
-  if (lastCallRoom) joinCall(lastCallRoom, lastCallVideo);
+  if (lastCallAction){
+    if (lastCallAction.type === 'user') startCall(lastCallAction.id, lastCallAction.video);
+    else if (lastCallAction.type === 'group') joinGroup(lastCallAction.id);
+  } else if (lastCallRoom) {
+    joinCall(lastCallRoom, lastCallVideo);
+  }
 }
 
 function hangup(){
@@ -1199,6 +1226,7 @@ function onmessage(e){
       break;
     }
     case 'call_invite': {
+      lastCallAction = {type:'user', id:data.from, video:data.video};
       if (confirm('Rejoindre l\'appel ' + (data.video ? 'video' : 'audio') + ' de ' + (clients[data.from]?.name || 'Utilisateur') + ' ?')) {
         joinCall(data.room, data.video);
       }
