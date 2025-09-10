@@ -281,6 +281,26 @@ class Events
             }
 
             /**
+             * Historique des messages privés avec un utilisateur.
+             */
+            case 'dm_history': {
+                $to = $data['to_client_id'] ?? null;
+                if(!$to) return;
+                $uuid = $_SESSION['client_uuid'] ?? $client_id;
+                $room_key = 'dm:' . min($uuid, $to) . ':' . max($uuid, $to);
+                $history = ChatDb::getMessages($room_key, 50);
+                foreach ($history as &$m) {
+                    $m['dm'] = true;
+                }
+                unset($m);
+                Gateway::sendToClient($client_id, json_encode([
+                    'type'     => 'history',
+                    'messages' => $history,
+                ]));
+                return;
+            }
+
+            /**
              * Message :
              *  - DM : envoie à l'autre ET au sender (une seule fois chacun)
              *  - Room : broadcast à la room courante
