@@ -201,6 +201,7 @@ let lastCallRoom = null, lastCallVideo = false;
 let micEnabled = true, videoEnabled = true;
 let wakeLock = null;
 let lastCallError = '';
+const shownIceErrors = new Set();
 
 function showCallError(msg){
   document.getElementById('callError').textContent = msg || '';
@@ -575,6 +576,7 @@ function joinCall(room, video){
   document.getElementById('videoBtn').textContent = video ? 'Désactiver vidéo' : 'Activer vidéo';
   document.getElementById('callOverlay').classList.add('active');
   showCallError('');
+  shownIceErrors.clear();
   getUserMedia({audio:true, video:video}).then(stream => {
     localStream = stream;
     document.getElementById('localVideo').srcObject = stream;
@@ -683,6 +685,9 @@ function createPeer(id){
   if (localStream) localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
   pc.onicecandidate = e => { if (e.candidate) signalSend({type:'candidate', from:client_id, to:id, candidate:e.candidate}); };
   pc.onicecandidateerror = e => {
+    const key = `${e.errorCode}|${e.errorText}|${e.url}`;
+    if (shownIceErrors.has(key)) return;
+    shownIceErrors.add(key);
     console.error('icecandidateerror', e);
     const txt = translateIceError(e.errorText);
     showCallError('Erreur ICE (' + e.errorCode + '): ' + txt + '. Vérifiez votre configuration réseau/NAT.');
@@ -795,6 +800,7 @@ function hangup(){
   const overlay = document.getElementById('callOverlay');
   overlay.classList.remove('active','with-remote');
   showCallError('');
+  shownIceErrors.clear();
 }
 
 function isFriend(id){
