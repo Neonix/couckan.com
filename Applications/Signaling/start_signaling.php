@@ -28,11 +28,18 @@ $signal->onMessage = function ($connection, $data) {
     $data = json_decode($data, true);
     switch ($data['cmd'] ?? '') {
         case 'register':
-            $subject = (int) ($data['roomid'] ?? 0);
+            // Use room identifiers as strings to keep signaling channels isolated
+            $subject = (string) ($data['roomid'] ?? '');
+            if ($subject === '') {
+                // invalid room, close connection
+                $connection->close();
+                break;
+            }
             subscribe($subject, $connection);
             break;
         case 'send':
-            $subject = (int) ($data['roomid'] ?? 0);
+            $subject = (string) ($data['roomid'] ?? '');
+            if ($subject === '') break;
             $payload = $data['msg'] ?? null;
             publish($subject, null, $payload, $connection);
             break;

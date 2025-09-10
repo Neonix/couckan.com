@@ -9,6 +9,7 @@ include __DIR__ . '/../../../config.php';
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Chat futuriste pour se connecter et converser en temps réel sur une carte interactive." />
   <link rel="canonical" href="https://couckan.com/" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta property="og:title" content="Chat Futuriste" />
   <meta property="og:description" content="Rejoignez Couckan pour discuter en temps réel sur une carte interactive mondiale." />
   <meta property="og:type" content="website" />
@@ -150,11 +151,11 @@ include __DIR__ . '/../../../config.php';
     <div id="remoteVideos"></div>
     <div id="callError" class="error"></div>
     <div id="callControls">
-      <button class="btn secondary" id="micBtn" onclick="toggleMic()">Couper micro</button>
-      <button class="btn secondary" id="videoBtn" onclick="toggleVideo()">Désactiver vidéo</button>
-      <button class="btn secondary" onclick="toggleFullscreen()">Plein écran</button>
-      <button class="btn secondary" onclick="recall()">Rappeler</button>
-      <button class="btn" onclick="hangup()">Raccrocher</button>
+      <button class="btn secondary" id="micBtn" onclick="toggleMic()" title="Couper micro">🔇</button>
+      <button class="btn secondary" id="videoBtn" onclick="toggleVideo()" title="Désactiver vidéo">🎥</button>
+      <button class="btn secondary" onclick="toggleFullscreen()" title="Plein écran">⛶</button>
+      <button class="btn secondary" onclick="recall()" title="Rappeler">↻</button>
+      <button class="btn" onclick="hangup()" title="Raccrocher">📴</button>
     </div>
   </div>
   <div id="toastContainer"></div>
@@ -196,13 +197,28 @@ let notifState = (typeof Notification !== 'undefined' && Notification.permission
 const mutedUsers = new Set();
 const locationShared = {}; // track which users already triggered a location toast
 let signal, callRoom = null, peers = {}, localStream = null, callVideo = false;
-let lastCallRoom = null, lastCallVideo = false;
+let lastCallRoom = null, lastCallVideo = false, lastCallAction = null;
 let micEnabled = true, videoEnabled = true;
 let wakeLock = null;
+let lastCallError = '';
+const shownIceErrors = new Set();
 
 function showCallError(msg){
   document.getElementById('callError').textContent = msg || '';
-  if (msg) showToast('Erreur: ' + msg);
+  if (msg && msg !== lastCallError){
+    showToast('Erreur: ' + msg);
+    lastCallError = msg;
+  }
+  if (!msg) lastCallError = '';
+}
+
+function translateIceError(text){
+  if (!text) return '';
+  const cleaned = text.replace('Addess','Address');
+  const map = {
+    'Address not associated with the desired network interface': "Adresse non associée à l'interface réseau souhaitée"
+  };
+  return map[cleaned] || cleaned;
 }
 
 function mediaErrorMessage(err){
@@ -222,15 +238,8 @@ function mediaErrorMessage(err){
 }
 
   <?php
-  if ($_config['docker']) {
-    echo "const SIGNALING_URL = 'wss://' + document.domain + '/signal';";
-  } else {
-      // WebServer
-      if ($_config['ssl'])
-        echo "const SIGNALING_URL = 'wss://' + document.domain + ':8877';";
-      else
-        echo "const SIGNALING_URL = 'ws://' + document.domain + ':8877';";
-  }
+  // Use the signaling URL computed from configuration to avoid hard coded ports
+  echo "const SIGNALING_URL = '" . $SIGNALING_ADDRESS . "';";
   echo "\nconst ICE_SERVERS = " . json_encode($_config['ice_servers']) . ";";
   ?>
   
@@ -238,7 +247,7 @@ const CESIUM_ION_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJjNmM4N
 Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
 
 const viewer = new Cesium.Viewer('cesiumContainer', {
-    geocoder:false, homeButton:true, baseLayerPicker:false, timeline:false, animation:false,
+    geocoder:false, homeButton:false, baseLayerPicker:false, timeline:false, animation:false,
     sceneModePicker:false, navigationHelpButton:false, shouldAnimate:true
   });
 
@@ -437,15 +446,7 @@ document.getElementById('playBtn').onclick = () => {
   myZoom = 5000;
   locationState = 'all';
   shareLocation();
-  updateLocBtn();
 };
-const homeBtn = toolbar.querySelector('.cesium-home-button');
-if (homeBtn) {
-  homeBtn.addEventListener('click', () => {
-    usersPanel.classList.remove('active');
-  });
-}
-
 document.addEventListener('click', (e) => {
   if (justOpenedProfile) { justOpenedProfile = false; return; }
   const path = e.composedPath();
@@ -548,12 +549,14 @@ function wizz(id){
 
 function startCall(id, video){
   if (!client_id) return;
+  lastCallAction = {type:'user', id, video};
   const room = client_id < id ? `call_${client_id}_${id}` : `call_${id}_${client_id}`;
   ws.send(JSON.stringify({type:'call_invite', to:id, room, video}));
   joinCall(room, video);
 }
 
 function joinGroup(id){
+  lastCallAction = {type:'group', id};
   const room = `group_${id}`;
   joinCall(room, true);
 }
@@ -563,10 +566,15 @@ function joinCall(room, video){
   callRoom = room; callVideo = video;
   lastCallRoom = room; lastCallVideo = video;
   micEnabled = true; videoEnabled = video;
-  document.getElementById('micBtn').textContent = 'Couper micro';
-  document.getElementById('videoBtn').textContent = video ? 'Désactiver vidéo' : 'Activer vidéo';
+  const micBtn = document.getElementById('micBtn');
+  micBtn.textContent = '🔇';
+  micBtn.title = 'Couper micro';
+  const videoBtn = document.getElementById('videoBtn');
+  videoBtn.textContent = video ? '🎥' : '📷';
+  videoBtn.title = video ? 'Désactiver vidéo' : 'Activer vidéo';
   document.getElementById('callOverlay').classList.add('active');
   showCallError('');
+  shownIceErrors.clear();
   getUserMedia({audio:true, video:video}).then(stream => {
     localStream = stream;
     document.getElementById('localVideo').srcObject = stream;
@@ -582,7 +590,8 @@ function connectSignal(room){
   signal = new WebSocket(SIGNALING_URL);
   signal.onopen = () => {
     signal.send(JSON.stringify({cmd:'register', roomid:room}));
-    signalSend({type:'join', from:client_id});
+    // include room in join to ensure peers only react to participants in the same call
+    signalSend({type:'join', room:room, from:client_id});
   };
   signal.onmessage = e => {
     const data = JSON.parse(e.data);
@@ -606,7 +615,8 @@ function signalSend(msg){
 async function handleSignal(msg){
   switch(msg.type){
     case 'join':
-      if (msg.from === client_id) return;
+      // ignore join messages from ourselves or from other rooms
+      if (msg.from === client_id || msg.room !== callRoom) return;
       // L'offre initiale sera générée par le gestionnaire `onnegotiationneeded`
       // déclenché lors de l'ajout des pistes locales dans `createPeer`.
       createPeer(msg.from);
@@ -643,6 +653,7 @@ async function handleSignal(msg){
         await pc4.addIceCandidate(new RTCIceCandidate(msg.candidate));
       } catch(err){
         console.error('candidate', err);
+        showCallError("Candidat ICE invalide ou bloqué par le réseau.");
       }
       break;
     case 'leave':
@@ -671,6 +682,14 @@ function createPeer(id){
   peers[id] = pc;
   if (localStream) localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
   pc.onicecandidate = e => { if (e.candidate) signalSend({type:'candidate', from:client_id, to:id, candidate:e.candidate}); };
+  pc.onicecandidateerror = e => {
+    const txt = translateIceError(e.errorText);
+    const key = `${e.errorCode}|${txt}`;
+    if (shownIceErrors.has(key)) return;
+    shownIceErrors.add(key);
+    console.error('icecandidateerror', e);
+    showCallError('Erreur ICE (' + e.errorCode + '): ' + txt + '. Vérifiez votre configuration réseau/NAT.');
+  };
   // Ajoute directement le premier flux reçu (audio+vidéo) au lecteur distant
   pc.ontrack = e => addRemoteStream(id, e.streams[0]);
   pc.onnegotiationneeded = async () => {
@@ -724,7 +743,14 @@ function toggleMic(){
   if (!track) return;
   micEnabled = !track.enabled;
   track.enabled = micEnabled;
-  document.getElementById('micBtn').textContent = micEnabled ? 'Couper micro' : 'Activer micro';
+  const btn = document.getElementById('micBtn');
+  if (micEnabled){
+    btn.textContent = '🔇';
+    btn.title = 'Couper micro';
+  } else {
+    btn.textContent = '🎤';
+    btn.title = 'Activer micro';
+  }
 }
 
 function toggleVideo(){
@@ -733,14 +759,23 @@ function toggleVideo(){
   if (track){
     videoEnabled = !track.enabled;
     track.enabled = videoEnabled;
-    document.getElementById('videoBtn').textContent = videoEnabled ? 'Désactiver vidéo' : 'Activer vidéo';
+    const btn = document.getElementById('videoBtn');
+    if (videoEnabled){
+      btn.textContent = '🎥';
+      btn.title = 'Désactiver vidéo';
+    } else {
+      btn.textContent = '📷';
+      btn.title = 'Activer vidéo';
+    }
   } else {
     getUserMedia({video:true}).then(stream=>{
       track = stream.getVideoTracks()[0];
       localStream.addTrack(track);
       Object.values(peers).forEach(pc=>pc.addTrack(track, localStream));
       videoEnabled = true;
-      document.getElementById('videoBtn').textContent = 'Désactiver vidéo';
+      const btn = document.getElementById('videoBtn');
+      btn.textContent = '🎥';
+      btn.title = 'Désactiver vidéo';
     }).catch(err=>{
       console.error('video', err);
       showCallError(mediaErrorMessage(err));
@@ -758,7 +793,12 @@ function toggleFullscreen(){
 }
 
 function recall(){
-  if (lastCallRoom) joinCall(lastCallRoom, lastCallVideo);
+  if (lastCallAction){
+    if (lastCallAction.type === 'user') startCall(lastCallAction.id, lastCallAction.video);
+    else if (lastCallAction.type === 'group') joinGroup(lastCallAction.id);
+  } else if (lastCallRoom) {
+    joinCall(lastCallRoom, lastCallVideo);
+  }
 }
 
 function hangup(){
@@ -779,6 +819,7 @@ function hangup(){
   const overlay = document.getElementById('callOverlay');
   overlay.classList.remove('active','with-remote');
   showCallError('');
+  shownIceErrors.clear();
 }
 
 function isFriend(id){
@@ -886,6 +927,8 @@ function shareLocation(){
   const errorHandler = err => {
     console.warn('Erreur de localisation :', err.message);
     pendingLocationMsg = null;
+    locationState = 'none';
+    updateLocBtn();
     showToast('Erreur localisation: ' + err.message);
   };
 
@@ -893,6 +936,7 @@ function shareLocation(){
   navigator.geolocation.getCurrentPosition(pos => {
     sendPosition(pos);
     locationWatchId = navigator.geolocation.watchPosition(sendPosition, errorHandler, options);
+    updateLocBtn();
   }, errorHandler, options);
 }
 
@@ -1177,6 +1221,7 @@ function onmessage(e){
       break;
     }
     case 'call_invite': {
+      lastCallAction = {type:'user', id:data.from, video:data.video};
       if (confirm('Rejoindre l\'appel ' + (data.video ? 'video' : 'audio') + ' de ' + (clients[data.from]?.name || 'Utilisateur') + ' ?')) {
         joinCall(data.room, data.video);
       }
