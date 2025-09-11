@@ -49,7 +49,9 @@ $api->onMessage = function ($connection, $request) {
             $lat = isset($data['latitude']) ? (float)$data['latitude'] : null;
             $lng = isset($data['longitude']) ? (float)$data['longitude'] : null;
             $range = null;
-            if (isset($data['range'])) {
+            if (isset($data['range_km'])) {
+                $range = (float)$data['range_km'];
+            } elseif (isset($data['range'])) {
                 $range = (float)$data['range'];
             } elseif (isset($data['radius'])) {
                 $range = (float)$data['radius'];

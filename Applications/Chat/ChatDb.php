@@ -46,11 +46,6 @@ class ChatDb
             last_notified TEXT,
             created_at TEXT
         )');
-        try {
-            self::$db->exec('ALTER TABLE announcements ADD COLUMN last_notified TEXT');
-        } catch (\PDOException $e) {
-            // column already exists
-        }
         self::$db->exec('CREATE TABLE IF NOT EXISTS announcement_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             announcement_id INTEGER,
