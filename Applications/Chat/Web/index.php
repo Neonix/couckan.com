@@ -267,6 +267,8 @@ viewer.clock.currentTime = Cesium.JulianDate.now();
 viewer.clock.shouldAnimate = true;
   
 const locationEntities = {};
+const announcementEntities = {};
+const API_BASE = `${location.protocol}//${location.hostname}:8002`;
 const statusColors = {
   online: Cesium.Color.fromCssColorString('#22c55e'),
   busy: Cesium.Color.fromCssColorString('#f97316'),
@@ -1659,6 +1661,46 @@ function onSubmit(){
   ta.value = '';
 }
 
+async function loadAnnouncements(){
+  try{
+    const res = await fetch(`${API_BASE}/announce`);
+    if(!res.ok) return;
+    const list = await res.json();
+    list.forEach(a=>{
+      if(a.latitude !== null && a.longitude !== null){
+        const id = `announce_${a.id}`;
+        announcementEntities[id] = viewer.entities.add({
+          id,
+          position: Cesium.Cartesian3.fromDegrees(a.longitude, a.latitude),
+          point: { pixelSize: 8, color: Cesium.Color.YELLOW },
+          name: a.title || 'Annonce',
+          description:
+            (a.description?`<p>${a.description}</p>`:'')+
+            (a.area?`<p>Zone: ${a.area}</p>`:'')+
+            (a.landmarks?`<p>Repères: ${a.landmarks}</p>`:'')+
+            (a.is_offline?`<p>Annonce hors ligne – réponses différées.</p>`:'')+
+            (a.contact?`<p>Contact: ${a.contact}</p>`:'')+
+            (a.average_rating?`<p>Note: ${a.average_rating.toFixed(1)} (${a.rating_count})</p>`:'')
+        });
+        if(a.range_km){
+          viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(a.longitude, a.latitude),
+            ellipse:{
+              semiMajorAxis:a.range_km*1000,
+              semiMinorAxis:a.range_km*1000,
+              material:Cesium.Color.YELLOW.withAlpha(0.2),
+              outline:true,
+              outlineColor:Cesium.Color.YELLOW
+            }
+          });
+        }
+      }
+    });
+  }catch(e){
+    console.error('announces', e);
+  }
+}
+
 /* Enter -> envoyer ; Ctrl+Enter -> retour ligne */
 document.getElementById('input').addEventListener('keydown', (e)=>{
   if (e.key === 'Enter' && !e.ctrlKey) { e.preventDefault(); onSubmit(); }
@@ -1684,6 +1726,7 @@ function clearBlink(key){
 }
 
 /* Boot UI */
+loadAnnouncements();
 connect();
 renderTabs();
 renderMessages();
