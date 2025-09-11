@@ -95,6 +95,30 @@ $api->onMessage = function ($connection, $request) {
         return;
     }
 
+    if (preg_match('#^/announce/(\d+)$#', $path, $m)) {
+        $announcementId = (int)$m[1];
+        if ($method === 'OPTIONS') {
+            $connection->send(new Response(204, $headers, ''));
+            return;
+        }
+        if ($method === 'GET') {
+            $announcement = ChatDb::getAnnouncement($announcementId);
+            if (!$announcement) {
+                $body = json_encode(['error' => 'Not Found'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                $connection->send(new Response(404, $headers, $body));
+                return;
+            }
+            if (!empty($announcement['is_anonymous'])) {
+                unset($announcement['contact']);
+            }
+            $body = json_encode($announcement, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $connection->send(new Response(200, $headers, $body));
+            return;
+        }
+        $connection->send(new Response(405, $headers, json_encode(['error' => 'Method Not Allowed'])));
+        return;
+    }
+
     if (preg_match('#^/announce/(\d+)/messages$#', $path, $m)) {
         $announcementId = (int)$m[1];
         if ($method === 'OPTIONS') {
@@ -110,6 +134,15 @@ $api->onMessage = function ($connection, $request) {
                 return;
             }
             $from_contact = isset($data['from_contact']) ? (string)$data['from_contact'] : null;
+            $rating = null;
+            if (isset($data['rating'])) {
+                $rating = (int)$data['rating'];
+                if ($rating < 1 || $rating > 5) {
+                    $body = json_encode(['error' => 'Invalid rating'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                    $connection->send(new Response(400, $headers, $body));
+                    return;
+                }
+            }
             $announcement = ChatDb::getAnnouncement($announcementId);
             if ($announcement && !empty($announcement['allowed_keywords'])) {
                 $allowed = array_map('trim', explode(',', $announcement['allowed_keywords']));
@@ -127,7 +160,7 @@ $api->onMessage = function ($connection, $request) {
                     return;
                 }
             }
-            ChatDb::addAnnouncementMessage($announcementId, $from_contact, $content);
+            ChatDb::addAnnouncementMessage($announcementId, $from_contact, $content, $rating);
             $resp = ['status' => 'ok'];
             if ($announcement && $announcement['auto_reply']) {
                 $resp['auto_reply'] = $announcement['auto_reply'];

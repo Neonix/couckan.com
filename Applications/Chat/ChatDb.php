@@ -50,6 +50,7 @@ class ChatDb
             announcement_id INTEGER,
             from_contact TEXT,
             content TEXT,
+            rating INTEGER,
             created_at TEXT
         )');
         self::$db->exec('CREATE TABLE IF NOT EXISTS announcement_scheduled_messages (
@@ -111,18 +112,18 @@ class ChatDb
         return (int) self::$db->lastInsertId();
     }
 
-    public static function addAnnouncementMessage(int $announcement_id, ?string $from_contact, string $content): int
+    public static function addAnnouncementMessage(int $announcement_id, ?string $from_contact, string $content, ?int $rating = null): int
     {
         self::init();
-        $stmt = self::$db->prepare('INSERT INTO announcement_messages (announcement_id, from_contact, content, created_at) VALUES (?,?,?,?)');
-        $stmt->execute([$announcement_id, $from_contact, $content, date('Y-m-d H:i:s')]);
+        $stmt = self::$db->prepare('INSERT INTO announcement_messages (announcement_id, from_contact, content, rating, created_at) VALUES (?,?,?,?,?)');
+        $stmt->execute([$announcement_id, $from_contact, $content, $rating, date('Y-m-d H:i:s')]);
         return (int) self::$db->lastInsertId();
     }
 
     public static function getAnnouncementMessages(int $announcement_id): array
     {
         self::init();
-        $stmt = self::$db->prepare('SELECT id, from_contact, content, created_at FROM announcement_messages WHERE announcement_id = ? ORDER BY id DESC');
+        $stmt = self::$db->prepare('SELECT id, from_contact, content, rating, created_at FROM announcement_messages WHERE announcement_id = ? ORDER BY id DESC');
         $stmt->execute([$announcement_id]);
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
@@ -149,13 +150,24 @@ class ChatDb
         $stmt = self::$db->prepare('SELECT id, title, description, latitude, longitude, range_km, contact, area, landmarks, allowed_keywords, is_offline, auto_reply, notify_interval, visible_until, is_anonymous, created_at FROM announcements WHERE id = ?');
         $stmt->execute([$id]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-        return $row === false ? null : $row;
+        if ($row === false) {
+            return null;
+        }
+        $rstmt = self::$db->prepare('SELECT AVG(rating) as avg_rating, COUNT(rating) as rating_count FROM announcement_messages WHERE announcement_id = ? AND rating IS NOT NULL');
+        $rstmt->execute([$id]);
+        $rating = $rstmt->fetch(\PDO::FETCH_ASSOC);
+        $row['average_rating'] = $rating['avg_rating'] !== null ? (float)$rating['avg_rating'] : null;
+        $row['rating_count'] = (int) ($rating['rating_count'] ?? 0);
+        return $row;
     }
 
     public static function getAnnouncements(): array
     {
         self::init();
-        $stmt = self::$db->query('SELECT id, title, description, latitude, longitude, range_km, contact, area, landmarks, allowed_keywords, is_offline, notify_interval, visible_until, is_anonymous, created_at FROM announcements ORDER BY id DESC');
+        $stmt = self::$db->query('SELECT id, title, description, latitude, longitude, range_km, contact, area, landmarks, allowed_keywords, is_offline, notify_interval, visible_until, is_anonymous, created_at,
+            (SELECT AVG(rating) FROM announcement_messages WHERE announcement_id = announcements.id AND rating IS NOT NULL) AS average_rating,
+            (SELECT COUNT(rating) FROM announcement_messages WHERE announcement_id = announcements.id AND rating IS NOT NULL) AS rating_count
+            FROM announcements ORDER BY id DESC');
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 }
