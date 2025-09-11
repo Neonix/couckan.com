@@ -209,6 +209,26 @@ $api->onMessage = function ($connection, $request) {
         return;
     }
 
+    if (preg_match('#^/announce/(\d+)/summary$#', $path, $m)) {
+        $announcementId = (int)$m[1];
+        if ($method === 'OPTIONS') {
+            $connection->send(new Response(204, $headers, ''));
+            return;
+        }
+        if ($method === 'GET') {
+            $since = $request->get('since');
+            $messages = ChatDb::getAnnouncementSummary($announcementId, $since);
+            if ($request->get('mark') === '1') {
+                ChatDb::markAnnouncementNotified($announcementId);
+            }
+            $body = json_encode($messages, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $connection->send(new Response(200, $headers, $body));
+            return;
+        }
+        $connection->send(new Response(405, $headers, json_encode(['error' => 'Method Not Allowed'])));
+        return;
+    }
+
     $body = json_encode($_config, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $connection->send(new Response(200, $headers, $body));
 };

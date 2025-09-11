@@ -43,8 +43,14 @@ class ChatDb
             notify_interval TEXT,
             visible_until TEXT,
             is_anonymous INTEGER DEFAULT 0,
+            last_notified TEXT,
             created_at TEXT
         )');
+        try {
+            self::$db->exec('ALTER TABLE announcements ADD COLUMN last_notified TEXT');
+        } catch (\PDOException $e) {
+            // column already exists
+        }
         self::$db->exec('CREATE TABLE IF NOT EXISTS announcement_messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             announcement_id INTEGER,
@@ -144,6 +150,29 @@ class ChatDb
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    public static function getAnnouncementSummary(int $announcement_id, ?string $since = null): array
+    {
+        self::init();
+        if ($since === null) {
+            $stmt = self::$db->prepare('SELECT last_notified FROM announcements WHERE id = ?');
+            $stmt->execute([$announcement_id]);
+            $since = $stmt->fetchColumn();
+        }
+        if (!$since) {
+            $since = '1970-01-01 00:00:00';
+        }
+        $stmt = self::$db->prepare('SELECT id, from_contact, content, rating, created_at FROM announcement_messages WHERE announcement_id = ? AND created_at > ? ORDER BY id ASC');
+        $stmt->execute([$announcement_id, $since]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+    public static function markAnnouncementNotified(int $announcement_id): void
+    {
+        self::init();
+        $stmt = self::$db->prepare('UPDATE announcements SET last_notified = ? WHERE id = ?');
+        $stmt->execute([date('Y-m-d H:i:s'), $announcement_id]);
+    }
+
     public static function getAnnouncement(int $id): ?array
     {
         self::init();
@@ -164,10 +193,11 @@ class ChatDb
     public static function getAnnouncements(): array
     {
         self::init();
-        $stmt = self::$db->query('SELECT id, title, description, latitude, longitude, range_km, contact, area, landmarks, allowed_keywords, is_offline, notify_interval, visible_until, is_anonymous, created_at,
+        $stmt = self::$db->prepare('SELECT id, title, description, latitude, longitude, range_km, contact, area, landmarks, allowed_keywords, is_offline, notify_interval, visible_until, is_anonymous, created_at,
             (SELECT AVG(rating) FROM announcement_messages WHERE announcement_id = announcements.id AND rating IS NOT NULL) AS average_rating,
             (SELECT COUNT(rating) FROM announcement_messages WHERE announcement_id = announcements.id AND rating IS NOT NULL) AS rating_count
-            FROM announcements ORDER BY id DESC');
+            FROM announcements WHERE visible_until IS NULL OR visible_until > ? ORDER BY id DESC');
+        $stmt->execute([date('Y-m-d H:i:s')]);
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 }

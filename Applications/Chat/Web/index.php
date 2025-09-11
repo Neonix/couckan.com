@@ -1678,7 +1678,9 @@ async function loadAnnouncements(){
             (a.description?`<p>${a.description}</p>`:'')+
             (a.area?`<p>Zone: ${a.area}</p>`:'')+
             (a.landmarks?`<p>Repères: ${a.landmarks}</p>`:'')+
-            (a.contact?`<p>Contact: ${a.contact}</p>`:'')
+            (a.is_offline?`<p>Annonce hors ligne – réponses différées.</p>`:'')+
+            (a.contact?`<p>Contact: ${a.contact}</p>`:'')+
+            (a.average_rating?`<p>Note: ${a.average_rating.toFixed(1)} (${a.rating_count})</p>`:'')
         });
         if(a.range_km){
           viewer.entities.add({
